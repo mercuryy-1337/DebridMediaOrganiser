@@ -2,7 +2,7 @@
 A Python script designed to organize unorganized TV show torrents by creating symbolic links in a structured format. The script utilizes The Movie Database (TMDb) API to fetch the proper TV show names and creates symlinks for episodes based on this information
 
 # Features
-- Fetches proper TV show names and years from TMDb.
+- Fetches proper TV show names and optionally IMDb IDs from TMDb.
 - Supports resolution extraction and preservation (e.g., 720p, 1080p).
 - Creates symlinks in a structured directory format (Show Name/Season xx/).
 - Handles various naming conventions and unorganized torrent folders.
@@ -11,6 +11,7 @@ A Python script designed to organize unorganized TV show torrents by creating sy
 - Python 3.x
 - pip package manager
 - requests library
+- colorama library
 
 # Installation
 1. Clone Repository:
@@ -20,8 +21,7 @@ cd tmdb-tv-organiser
 ```
 2. Install the required Python packages:
 ``` sh
-pip install requests
-pip install colorama
+pip install requests colorama
 ```
 3. Get a TMDb API key:
 - Sign up on [TMDb](https://www.themoviedb.org/)
@@ -29,13 +29,13 @@ pip install colorama
 
 4. Run the script:
 ``` sh
-python3 renameshows.py src_dir dest_dir
+python3 renameshows.py src_dir dest_dir --id imdb
 ```
 
 # Usage
 **Basic Usage:**
 ```sh
-python3 renameshows.py src_dir dest_dir
+python3 renameshows.py src_dir dest_dir --id imdb
 ```
 src_dir: Source directory containing the unorganized TV show files. <br/>
 dest_dir: Destination directory where the symlinks will be created.
@@ -51,7 +51,7 @@ src_dir/
 ├── Show.Name.S01E02.1080p.mkv
 └── AnotherShow.S02E01.mkv
 ```
-**Destination directory after running script:**
+**Destination directory after running script with no id parameter:**
 ``` sh
 dest_dir/
 ├── Show Name (2020) {tmdb-0001}
@@ -59,6 +59,17 @@ dest_dir/
 │   │   ├── Show Name S01E01 720p.mkv -> ../../../../src_dir/Show.Name.S01E01.720p.mkv
 │   │   └── Show Name S01E02 1080p.mkv -> ../../../../src_dir/Show.Name.S01E02.1080p.mkv
 └── Another Show (2019) {tmdb-0002}
+    ├── Season 2
+    │   └── Another Show S02E01 720p.mkv -> ../../../../src_dir/AnotherShow.S02E01.mkv
+```
+**Destination directory after running script with --id imdb:**
+``` sh
+dest_dir/
+├── Show Name (2020) {imdb-tt1234567}
+│   ├── Season 1
+│   │   ├── Show Name S01E01 720p.mkv -> ../../../../src_dir/Show.Name.S01E01.720p.mkv
+│   │   └── Show Name S01E02 1080p.mkv -> ../../../../src_dir/Show.Name.S01E02.1080p.mkv
+└── Another Show (2019) {imdb-tt7654321}
     ├── Season 2
     │   └── Another Show S02E01 720p.mkv -> ../../../../src_dir/AnotherShow.S02E01.mkv
 ```
