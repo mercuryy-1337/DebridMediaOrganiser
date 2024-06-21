@@ -4,8 +4,10 @@ import re
 import shutil
 import requests
 import json
+from functools import lru_cache
 
 SETTINGS_FILE = 'settings.json'
+_api_cache = {}
 
 def get_api_key():
     if os.path.exists(SETTINGS_FILE):
@@ -25,26 +27,29 @@ def prompt_for_api_key():
     return api_key
 
 # Function to search for TV shows on TMDb and return the show name, id etc
+@lru_cache(maxsize=None)
 def search_tv_show(query, year=None):
+    cache_key = (query, year)
+    if cache_key in _api_cache:
+        return _api_cache[cache_key]
+
     api_key = get_api_key()
     if not api_key:
         api_key = prompt_for_api_key()
 
     url = "https://api.themoviedb.org/3/search/tv"
-    
+
     params = {
         'api_key': api_key,
         'query': query
     }
-    
     # Add the year parameter if provided
     if year:
         params['first_air_date_year'] = year
 
     try:
         response = requests.get(url, params=params)
-        response.raise_for_status()  # Raise an exception for bad responses
-
+        response.raise_for_status()
         results = response.json().get('results', [])
 
         if results:
@@ -55,19 +60,19 @@ def search_tv_show(query, year=None):
             first_air_date = show.get('first_air_date')
             show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
             proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+            _api_cache[cache_key] = proper_name
             return proper_name
         else:
+            _api_cache[cache_key] = f"{query}"
             return f"{query}"
 
     except requests.exceptions.RequestException as e:
         return f"Error fetching data: {e}"
 
 def extract_year(query):
-    # Match year in brackets at the end of the string
     match = re.search(r'\((\d{4})\)$', query.strip())
     if match:
         return int(match.group(1))
-    # Match year not in brackets at the end of the string
     match = re.search(r'(\d{4})$', query.strip())
     if match:
         return int(match.group(1))
@@ -86,40 +91,32 @@ def extract_resolution(filename):
     return None
 
 def create_symlinks(src_dir, dest_dir):
-    # Ensure the destination directory exists
     os.makedirs(dest_dir, exist_ok=True)
-y
+
     for root, dirs, files in os.walk(src_dir):
         for file in files:
             src_file = os.path.join(root, file)
             
-            # Check if the filename has the S00E00 pattern
             episode_match = re.search(r'(.*?)(S\d{2}E\d{2})', file, re.IGNORECASE)
             if not episode_match:
                 print(f"Skipping file without S00E00 pattern: {file}")
                 continue
 
-            # Extract show name and episode identifier
             episode_identifier = episode_match.group(2)
             
-            # If the filename starts with S00E00, use the folder name as the show name
             if re.match(r'S\d{2}E\d{2}', file, re.IGNORECASE):
-            # Use parent folder name as show name
                 parent_folder_name = os.path.basename(root)
-                # Remove season identifier and everything after it, including "Season x"
                 show_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*', '', parent_folder_name).replace('-', ' ').replace('.', ' ').strip()
             else:
                 show_name = episode_match.group(1).replace('.', ' ').strip()
 
             name, ext = os.path.splitext(file)
             
-            # Replace periods with spaces in the name part
             if '.' in name:
                 new_name = re.sub(r'\.', ' ', name)
             else:
                 new_name = name
             
-            # Extract and preserve resolution identifier
             resolution = extract_resolution(new_name)
             if resolution:
                 split_name = new_name.split(resolution)[0]
@@ -130,13 +127,10 @@ y
             else:
                 new_name += ext
 
-            # Define season folder
             season_number = re.search(r'S(\d{2})E\d{2}', episode_identifier, re.IGNORECASE).group(1)
-            season_folder = f"Season {int(season_number)}"  # 'Sxx' -> 'Season xx'
+            season_folder = f"Season {int(season_number)}"
             
-            # Define destination path based on show name and season folder
-            show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name)  # Remove trailing spaces, underscores, or dashes
-            
+            show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name)
             show_folder = show_folder.rstrip()
             
             if show_folder.isdigit() and len(show_folder) <= 4:
@@ -144,32 +138,26 @@ y
             else:
                 year = extract_year(show_folder)
                 if year:
-                    # Remove year in brackets
                     show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
-                    # Remove year without brackets
                     show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
             
-            show_folder = search_tv_show(show_folder,year)
-            show_folder = show_folder.replace('/','')
+            show_folder = search_tv_show(show_folder, year)
+            show_folder = show_folder.replace('/', '')
             dest_path = os.path.join(dest_dir, show_folder, season_folder)
             os.makedirs(dest_path, exist_ok=True)
             
-            # Determine the full destination file path
             dest_file = os.path.join(dest_path, new_name)
             
-            # Check if symlink already exists and is valid
             if os.path.islink(dest_file):
                 if os.readlink(dest_file) == src_file:
-                    continue  # Symlink is correct
+                    continue
                 else:
-                    os.remove(dest_file)  # Remove incorrect symlink
-
-            # Avoid overwriting existing non-symlink files
+                    os.remove(dest_file)
+            
             if os.path.exists(dest_file) and not os.path.islink(dest_file):
                 print(f"Skipping existing file: {dest_file}")
                 continue
 
-            # Create the symlink or copy the file
             if os.path.isdir(src_file):
                 shutil.copytree(src_file, dest_file, symlinks=True)
             else:
