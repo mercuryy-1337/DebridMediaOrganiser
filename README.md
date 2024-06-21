@@ -21,6 +21,7 @@ cd tmdb-tv-organiser
 2. Install the required Python packages:
 ``` sh
 pip install requests
+pip install colorama
 ```
 3. Get a TMDb API key:
 - Sign up on [TMDb](https://www.themoviedb.org/)
