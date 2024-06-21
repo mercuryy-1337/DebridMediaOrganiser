@@ -5,6 +5,9 @@ import shutil
 import requests
 import json
 from functools import lru_cache
+from colorama import init, Fore, Style
+
+init(autoreset=True)
 
 SETTINGS_FILE = 'settings.json'
 _api_cache = {}
@@ -53,15 +56,40 @@ def search_tv_show(query, year=None):
         results = response.json().get('results', [])
 
         if results:
-            # Get the first result (very high success rate so i'm keeping it this way)
-            show = results[0]
-            show_name = show.get('name')
-            show_id = show.get('id')
-            first_air_date = show.get('first_air_date')
-            show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
-            proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
-            _api_cache[cache_key] = proper_name
-            return proper_name
+            if len(results) == 1:
+                chosen_show = results[0]
+                show_name = chosen_show.get('name')
+                show_id = chosen_show.get('id')
+                first_air_date = chosen_show.get('first_air_date')
+                show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
+                proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+                _api_cache[cache_key] = proper_name
+                return proper_name
+            else:
+                print(Fore.YELLOW + f"Original file/show name: {query} year={year}")
+
+                # Show the first 3 results and let the user choose one
+                for idx, show in enumerate(results[:3]):
+                    show_name = show.get('name')
+                    show_id = show.get('id')
+                    first_air_date = show.get('first_air_date')
+                    show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
+                    print(Fore.CYAN + f"{idx + 1}: {show_name} ({show_year}) [tmdb-{show_id}]")
+
+                choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: ").strip()
+
+            if choice.isdigit() and 1 <= int(choice) <= 3:
+                chosen_show = results[int(choice) - 1]
+                show_name = chosen_show.get('name')
+                show_id = chosen_show.get('id')
+                first_air_date = chosen_show.get('first_air_date')
+                show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
+                proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+                _api_cache[cache_key] = proper_name
+                return proper_name
+            else:
+                _api_cache[cache_key] = f"{query}"
+                return f"{query}"
         else:
             _api_cache[cache_key] = f"{query}"
             return f"{query}"
