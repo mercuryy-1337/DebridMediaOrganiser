@@ -29,10 +29,29 @@ def prompt_for_api_key():
     save_api_key(api_key)
     return api_key
 
-# Function to search for TV shows on TMDb and return the show name, id etc
+def get_imdb_id(tmdb_id):
+    api_key = get_api_key()
+    if not api_key:
+        api_key = prompt_for_api_key()
+
+    url = f"https://api.themoviedb.org/3/tv/{tmdb_id}/external_ids"
+    params = {
+        'api_key': api_key
+    }
+
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        external_ids = response.json()
+        imdb_id = external_ids.get('imdb_id')
+        return imdb_id
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching IMDb ID for TMDb ID {tmdb_id}: {e}")
+        return None
+
 @lru_cache(maxsize=None)
-def search_tv_show(query, year=None):
-    cache_key = (query, year)
+def search_tv_show(query, year=None, id='tmdb'):
+    cache_key = (query, year, id)
     if cache_key in _api_cache:
         return _api_cache[cache_key]
 
@@ -62,7 +81,14 @@ def search_tv_show(query, year=None):
                 show_id = chosen_show.get('id')
                 first_air_date = chosen_show.get('first_air_date')
                 show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
-                proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+                tmdb_id = chosen_show.get('id')
+                imdb_id = get_imdb_id(tmdb_id) if id == 'imdb' else None
+                if id == 'tmdb':
+                    proper_name = f"{show_name} ({show_year}) {{tmdb-{tmdb_id}}}"
+                elif id == 'imdb' and imdb_id:
+                    proper_name = f"{show_name} ({show_year}) {{imdb-{imdb_id}}}"
+                else:
+                    proper_name = f"{show_name} ({show_year})"
                 _api_cache[cache_key] = proper_name
                 return proper_name
             else:
@@ -78,18 +104,25 @@ def search_tv_show(query, year=None):
 
                 choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: ").strip()
 
-            if choice.isdigit() and 1 <= int(choice) <= 3:
-                chosen_show = results[int(choice) - 1]
-                show_name = chosen_show.get('name')
-                show_id = chosen_show.get('id')
-                first_air_date = chosen_show.get('first_air_date')
-                show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
-                proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
-                _api_cache[cache_key] = proper_name
-                return proper_name
-            else:
-                _api_cache[cache_key] = f"{query}"
-                return f"{query}"
+                if choice.isdigit() and 1 <= int(choice) <= 3:
+                    chosen_show = results[int(choice) - 1]
+                    show_name = chosen_show.get('name')
+                    show_id = chosen_show.get('id')
+                    first_air_date = chosen_show.get('first_air_date')
+                    show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
+                    tmdb_id = chosen_show.get('id')
+                    imdb_id = get_imdb_id(tmdb_id) if id == 'imdb' else None
+                    if id == 'tmdb':
+                        proper_name = f"{show_name} ({show_year}) {{tmdb-{tmdb_id}}}"
+                    elif id == 'imdb' and imdb_id:
+                        proper_name = f"{show_name} ({show_year}) {{imdb-{imdb_id}}}"
+                    else:
+                        proper_name = f"{show_name} ({show_year})"
+                    _api_cache[cache_key] = proper_name
+                    return proper_name
+                else:
+                    _api_cache[cache_key] = f"{query}"
+                    return f"{query}"
         else:
             _api_cache[cache_key] = f"{query}"
             return f"{query}"
@@ -169,7 +202,7 @@ def create_symlinks(src_dir, dest_dir):
                     show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
                     show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
             
-            show_folder = search_tv_show(show_folder, year)
+            show_folder = search_tv_show(show_folder, year, id=args.id)
             show_folder = show_folder.replace('/', '')
             dest_path = os.path.join(dest_dir, show_folder, season_folder)
             os.makedirs(dest_path, exist_ok=True)
@@ -196,6 +229,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
     parser.add_argument("src_dir", type=str, help="Source directory to search for files")
     parser.add_argument("dest_dir", type=str, help="Destination directory to place symlinks")
+    parser.add_argument("--id", choices=['tmdb', 'imdb'], default='tmdb', help="Choose whether to include tmdb or imdb id in the proper_name (default: tmdb)")
     args = parser.parse_args()
 
     create_symlinks(args.src_dir, args.dest_dir)
