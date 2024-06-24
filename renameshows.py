@@ -151,6 +151,15 @@ def extract_resolution(filename):
             return match.group(1)
     return None
 
+def extract_folder_year(folder_name):
+    match = re.search(r'\((\d{4})\)', folder_name)
+    if match:
+        return int(match.group(1))
+    match = re.search(r'\.(\d{4})\.', folder_name)
+    if match:
+        return int(match.group(1))
+    return None
+
 def create_symlinks(src_dir, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
 
@@ -158,15 +167,29 @@ def create_symlinks(src_dir, dest_dir):
         for file in files:
             src_file = os.path.join(root, file)
             
-            episode_match = re.search(r'(.*?)(S\d{2}E\d{2})', file, re.IGNORECASE)
+            symlink_exists = False
+            #check if there's a symlink attached to file before continuing
+            for dirpath, _, filenames in os.walk(dest_dir):
+                for filename in filenames:
+                    full_dest_file = os.path.join(dirpath, filename)
+                    if os.path.islink(full_dest_file) and os.readlink(full_dest_file) == src_file:
+                        symlink_exists = True
+                        break
+                if symlink_exists:
+                    break
+            
+            if symlink_exists:
+                continue
+            
+            episode_match = re.search(r'(.*?)(S\d{2} ?E\d{2})', file, re.IGNORECASE)
             if not episode_match:
                 print(f"Skipping file without S00E00 pattern: {file}")
                 continue
 
             episode_identifier = episode_match.group(2)
+            parent_folder_name = os.path.basename(root)
             
-            if re.match(r'S\d{2}E\d{2}', file, re.IGNORECASE):
-                parent_folder_name = os.path.basename(root)
+            if re.match(r'S\d{2} ?E\d{2}', file, re.IGNORECASE):
                 show_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*', '', parent_folder_name).replace('-', ' ').replace('.', ' ').strip()
             else:
                 show_name = episode_match.group(1).replace('.', ' ').strip()
@@ -188,7 +211,7 @@ def create_symlinks(src_dir, dest_dir):
             else:
                 new_name += ext
 
-            season_number = re.search(r'S(\d{2})E\d{2}', episode_identifier, re.IGNORECASE).group(1)
+            season_number = re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1)
             season_folder = f"Season {int(season_number)}"
             
             show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name)
@@ -197,7 +220,7 @@ def create_symlinks(src_dir, dest_dir):
             if show_folder.isdigit() and len(show_folder) <= 4:
                 year = None
             else:
-                year = extract_year(show_folder)
+                year = extract_folder_year(parent_folder_name) or extract_year(show_folder)
                 if year:
                     show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
                     show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
@@ -233,3 +256,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     create_symlinks(args.src_dir, args.dest_dir)
+    
