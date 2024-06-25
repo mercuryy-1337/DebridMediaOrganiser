@@ -6,6 +6,7 @@ A Python script designed to organize unorganized TV show torrents by creating sy
 - Supports resolution extraction and preservation (e.g., 720p, 1080p).
 - Creates symlinks in a structured directory format (Show Name/Season xx/).
 - Handles various naming conventions and unorganized torrent folders.
+- Auto select tv show result (there will be bad matches and/or wrong grouping for shows with same names but different years)
 
 # Requirements
 - Python 3.x
@@ -35,10 +36,11 @@ python3 renameshows.py src_dir dest_dir --id imdb
 # Usage
 **Basic Usage:**
 ```sh
-python3 renameshows.py src_dir dest_dir --id imdb
+python3 renameshows.py src_dir dest_dir --id imdb [--force]
 ```
 src_dir: Source directory containing the unorganized TV show files. <br/>
 dest_dir: Destination directory where the symlinks will be created.
+the optional --force flag enables the script to automatically select a result for TV show searches without requiring user input.
 
 API Key Configuration:
 On the first run, you will be prompted to enter your TMDb API key. The key will be saved in settings.json for future use.
