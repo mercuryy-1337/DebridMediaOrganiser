@@ -50,7 +50,7 @@ def get_imdb_id(tmdb_id):
         return None
 
 @lru_cache(maxsize=None)
-def search_tv_show(query, year=None, id='tmdb'):
+def search_tv_show(query, year=None, id='tmdb', force=False):
     cache_key = (query, year, id)
     if cache_key in _api_cache:
         return _api_cache[cache_key]
@@ -75,8 +75,12 @@ def search_tv_show(query, year=None, id='tmdb'):
         results = response.json().get('results', [])
 
         if results:
-            if len(results) == 1:
+            chosen_show = results[0] if force else None
+
+            if not force and len(results) == 1:
                 chosen_show = results[0]
+
+            if chosen_show:
                 show_name = chosen_show.get('name')
                 show_id = chosen_show.get('id')
                 first_air_date = chosen_show.get('first_air_date')
@@ -102,10 +106,13 @@ def search_tv_show(query, year=None, id='tmdb'):
                     show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
                     print(Fore.CYAN + f"{idx + 1}: {show_name} ({show_year}) [tmdb-{show_id}]")
 
-                choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: ").strip()
+                if not force:
+                    choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: ").strip()
 
-                if choice.isdigit() and 1 <= int(choice) <= 3:
-                    chosen_show = results[int(choice) - 1]
+                    if choice.isdigit() and 1 <= int(choice) <= 3:
+                        chosen_show = results[int(choice) - 1]
+
+                if chosen_show:
                     show_name = chosen_show.get('name')
                     show_id = chosen_show.get('id')
                     first_air_date = chosen_show.get('first_air_date')
@@ -160,7 +167,7 @@ def extract_folder_year(folder_name):
         return int(match.group(1))
     return None
 
-def create_symlinks(src_dir, dest_dir):
+def create_symlinks(src_dir, dest_dir, force=False):
     os.makedirs(dest_dir, exist_ok=True)
 
     for root, dirs, files in os.walk(src_dir):
@@ -225,7 +232,7 @@ def create_symlinks(src_dir, dest_dir):
                     show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
                     show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
             
-            show_folder = search_tv_show(show_folder, year, id=args.id)
+            show_folder = search_tv_show(show_folder, year, id=args.id, force=args.force)
             show_folder = show_folder.replace('/', '')
             dest_path = os.path.join(dest_dir, show_folder, season_folder)
             os.makedirs(dest_path, exist_ok=True)
@@ -253,7 +260,8 @@ if __name__ == "__main__":
     parser.add_argument("src_dir", type=str, help="Source directory to search for files")
     parser.add_argument("dest_dir", type=str, help="Destination directory to place symlinks")
     parser.add_argument("--id", choices=['tmdb', 'imdb'], default='tmdb', help="Choose whether to include tmdb or imdb id in the proper_name (default: tmdb)")
+    parser.add_argument("--force", action="store_true", help="Disregards user input and automatically chooses the first option")
     args = parser.parse_args()
 
-    create_symlinks(args.src_dir, args.dest_dir)
-    
+    create_symlinks(args.src_dir, args.dest_dir, force=args.force)
+
