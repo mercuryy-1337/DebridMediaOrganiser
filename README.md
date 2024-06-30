@@ -25,25 +25,29 @@ cd tmdb-tv-organiser
 pip install requests colorama
 ```
 3. Get a TMDb API key:
-- Sign up on [TMDb](https://www.themoviedb.org/)
-- Go to your account settings and generate an API key then copy that key.
+- Sign up on [TMDb](https://www.themoviedb.org/) if you don't already have an account.
+- Once you've signed up or logged in, go to your account settings
+- Head over to the API section then generate an API key.
+- Once the key is generated, copy the first "API Key" and store this for later.
 
 4. Run the script:
 ``` sh
-python3 renameshows.py src_dir dest_dir --id imdb
+python3 renameshows.py
 ```
 
 # Usage
 **Basic Usage:**
 ```sh
-python3 renameshows.py src_dir dest_dir --id imdb [--force]
+python3 renameshows.py [--force]
 ```
-src_dir: Source directory containing the unorganized TV show files. <br/>
-dest_dir: Destination directory where the symlinks will be created.
+On the first run, the script will prompt you to enter the following settings, which will then be saved in settings.json for future use:
+1. Your TMDb API key. Used to authenticate requests to The Movie Database (TMDb) API, enabling access to TV show data such as titles, IDs, and external identifiers like IMDb IDs. <br/>
+2. Source directory containing the unorganized TV show files (src_dir). <br/>
+3. Destination directory where the symlinks will be created and organised into (dest_dir). <br/>
+4. Your preferred ID of choice for identifying TV shows, either 'tmdb' for TMDb (The Movie Database) or 'imdb' for IMDb (Internet Movie Database).
+
 the optional --force flag enables the script to automatically select a result for TV show searches without requiring user input.
 
-API Key Configuration:
-On the first run, you will be prompted to enter your TMDb API key. The key will be saved in settings.json for future use.
 
 ## Example
 **Source directory before running script:**
@@ -64,7 +68,7 @@ dest_dir/
     ├── Season 2
     │   └── Another Show S02E01 720p.mkv -> ../../../../src_dir/AnotherShow.S02E01.mkv
 ```
-**Destination directory after running script with --id imdb:**
+**Destination directory after running script with imdb chosen for id:**
 ``` sh
 dest_dir/
 ├── Show Name (2020) {imdb-tt1234567}
