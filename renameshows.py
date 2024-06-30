@@ -243,7 +243,7 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
             
             resolution = extract_resolution(new_name)
             if not resolution:
-                resolution = " "+ extract_resolution_from_folder(parent_folder_name)
+                resolution = extract_resolution_from_folder(parent_folder_name)
             if resolution:
                 split_name = new_name.split(resolution)[0]
                 if split_name.endswith("("):
