@@ -19,15 +19,36 @@ def get_api_key():
             return settings.get('api_key')
     return None
 
-def save_api_key(api_key):
-    settings = {'api_key': api_key}
+def save_settings(api_key, src_dir, dest_dir, id):
+    settings = {
+        'api_key': api_key,
+        'src_dir': src_dir,
+        'dest_dir': dest_dir,
+        'id': id
+    }
     with open(SETTINGS_FILE, 'w') as file:
         json.dump(settings, file)
 
 def prompt_for_api_key():
     api_key = input("Please enter your TMDb API key: ")
-    save_api_key(api_key)
     return api_key
+
+def prompt_for_settings():
+    if 'api_key' not in settings or not settings['api_key']:
+        api_key = prompt_for_api_key()
+    src_dir = input("Enter the source directory path: ")
+    dest_dir = input("Enter the destination directory path: ")
+    id_choice = input("Choose id (tmdb or imdb): ").strip().lower()
+    while id_choice not in ['tmdb', 'imdb']:
+        id_choice = input("Invalid choice. Choose id (tmdb or imdb): ").strip().lower()
+    save_settings(api_key, src_dir, dest_dir, id_choice)
+    return src_dir, dest_dir, id_choice
+
+def get_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, 'r') as file:
+            return json.load(file)
+    return {}
 
 def get_imdb_id(tmdb_id):
     api_key = get_api_key()
@@ -107,7 +128,7 @@ def search_tv_show(query, year=None, id='tmdb', force=False):
                     print(Fore.CYAN + f"{idx + 1}: {show_name} ({show_year}) [tmdb-{show_id}]")
 
                 if not force:
-                    choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: ").strip()
+                    choice = input(Fore.GREEN + "Choose a show (1-3) or press Enter to skip: " + Style.RESET_ALL).strip()
 
                     if choice.isdigit() and 1 <= int(choice) <= 3:
                         chosen_show = results[int(choice) - 1]
@@ -167,7 +188,7 @@ def extract_folder_year(folder_name):
         return int(match.group(1))
     return None
 
-def create_symlinks(src_dir, dest_dir, force=False):
+def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
     os.makedirs(dest_dir, exist_ok=True)
 
     for root, dirs, files in os.walk(src_dir):
@@ -175,7 +196,7 @@ def create_symlinks(src_dir, dest_dir, force=False):
             src_file = os.path.join(root, file)
             
             symlink_exists = False
-            #check if there's a symlink attached to file before continuing
+            # Check if there's a symlink attached to the file before continuing
             for dirpath, _, filenames in os.walk(dest_dir):
                 for filename in filenames:
                     full_dest_file = os.path.join(dirpath, filename)
@@ -232,7 +253,7 @@ def create_symlinks(src_dir, dest_dir, force=False):
                     show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
                     show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
             
-            show_folder = search_tv_show(show_folder, year, id=args.id, force=args.force)
+            show_folder = search_tv_show(show_folder, year, id=id, force=force)
             show_folder = show_folder.replace('/', '')
             dest_path = os.path.join(dest_dir, show_folder, season_folder)
             os.makedirs(dest_path, exist_ok=True)
@@ -256,12 +277,18 @@ def create_symlinks(src_dir, dest_dir, force=False):
             print(f"Created symlink: {dest_file} -> {src_file}")
 
 if __name__ == "__main__":
+    settings = get_settings()
+
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
-    parser.add_argument("src_dir", type=str, help="Source directory to search for files")
-    parser.add_argument("dest_dir", type=str, help="Destination directory to place symlinks")
-    parser.add_argument("--id", choices=['tmdb', 'imdb'], default='tmdb', help="Choose whether to include tmdb or imdb id in the proper_name (default: tmdb)")
     parser.add_argument("--force", action="store_true", help="Disregards user input and automatically chooses the first option")
     args = parser.parse_args()
+    
+    if 'src_dir' not in settings or 'dest_dir' not in settings or 'id' not in settings:
+        print("Missing configuration in settings.json. Please provide necessary inputs.")
+        src_dir, dest_dir, id_choice = prompt_for_settings()
+    else:
+        src_dir = settings['src_dir']
+        dest_dir = settings['dest_dir']
+        id_choice = settings['id']
 
-    create_symlinks(args.src_dir, args.dest_dir, force=args.force)
-
+    create_symlinks(src_dir, dest_dir, force=args.force, id=id_choice)
