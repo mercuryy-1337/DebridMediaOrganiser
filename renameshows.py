@@ -179,6 +179,18 @@ def extract_resolution(filename):
             return match.group(1)
     return None
 
+def extract_resolution_from_folder(folder_name):
+    # Define patterns to find resolution in folder name
+    patterns = [
+        r'(\d{3,4}p)',    # Matches 720p, 1080p, etc.
+        r'(\d{3,4}x\d{3,4})'  # Matches 1920x1080, 1280x720, etc.
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, folder_name, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
 def extract_folder_year(folder_name):
     match = re.search(r'\((\d{4})\)', folder_name)
     if match:
@@ -230,6 +242,8 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
                 new_name = name
             
             resolution = extract_resolution(new_name)
+            if not resolution:
+                resolution = " "+ extract_resolution_from_folder(parent_folder_name)
             if resolution:
                 split_name = new_name.split(resolution)[0]
                 if split_name.endswith("("):
