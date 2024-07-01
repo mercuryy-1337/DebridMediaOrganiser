@@ -4,6 +4,7 @@ import re
 import shutil
 import requests
 import json
+import time
 from functools import lru_cache
 from colorama import init, Fore, Style
 
@@ -11,6 +12,24 @@ init(autoreset=True)
 
 SETTINGS_FILE = 'settings.json'
 _api_cache = {}
+
+LOG_LEVELS = {
+    "SUCCESS": {"level": 10, "color": Fore.LIGHTGREEN_EX},
+    "INFO": {"level": 20, "color": Fore.BLUE},
+    "ERROR": {"level": 30, "color": Fore.RED},
+    "WARN": {"level": 40, "color": Fore.YELLOW},
+    "DEBUG": {"level": 50, "color": Fore.LIGHTMAGENTA_EX}
+}
+
+def log_message(log_level, message):
+    current_time = time.strftime("%Y-%m-%d %H:%M:%S")
+    if log_level in LOG_LEVELS:
+        log_info = LOG_LEVELS[log_level]
+        formatted_message = f"{Fore.WHITE}{current_time} | {log_info['color']}{log_level} {Fore.WHITE}| {log_info['color']}{message}"
+        colored_message = f"{log_info['color']}{formatted_message}{Style.RESET_ALL}"
+        print(colored_message)
+    else:
+        print(f"Unknown log level: {log_level}")
 
 def get_api_key():
     if os.path.exists(SETTINGS_FILE):
@@ -67,7 +86,7 @@ def get_imdb_id(tmdb_id):
         imdb_id = external_ids.get('imdb_id')
         return imdb_id
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching IMDb ID for TMDb ID {tmdb_id}: {e}")
+        log_message("ERROR",f"Error fetching IMDb ID for TMDb ID {tmdb_id}: {e}")
         return None
 
 @lru_cache(maxsize=None)
@@ -115,6 +134,7 @@ def search_tv_show(query, year=None, id='tmdb', force=False):
                 else:
                     proper_name = f"{show_name} ({show_year})"
                 _api_cache[cache_key] = proper_name
+                #log_message("DEBUG",proper_name)
                 return proper_name
             else:
                 print(Fore.YELLOW + f"Original file/show name: {query} year={year}")
@@ -147,6 +167,7 @@ def search_tv_show(query, year=None, id='tmdb', force=False):
                     else:
                         proper_name = f"{show_name} ({show_year})"
                     _api_cache[cache_key] = proper_name
+                    #log_message("DEBUG",f"Selected show: {proper_name}")
                     return proper_name
                 else:
                     _api_cache[cache_key] = f"{query}"
@@ -156,7 +177,7 @@ def search_tv_show(query, year=None, id='tmdb', force=False):
             return f"{query}"
 
     except requests.exceptions.RequestException as e:
-        return f"Error fetching data: {e}"
+        log_message("ERROR","Error fetching data: {e}")
 
 def extract_year(query):
     match = re.search(r'\((\d{4})\)$', query.strip())
@@ -214,6 +235,7 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
                     full_dest_file = os.path.join(dirpath, filename)
                     if os.path.islink(full_dest_file) and os.readlink(full_dest_file) == src_file:
                         symlink_exists = True
+                        #log_message("DEBUG",f"Skipping file: {Style.RESET_ALL}{src_file}")
                         break
                 if symlink_exists:
                     break
@@ -223,7 +245,7 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
             
             episode_match = re.search(r'(.*?)(S\d{2} ?E\d{2})', file, re.IGNORECASE)
             if not episode_match:
-                print(f"Skipping file without S00E00 pattern: {file}")
+                log_message("WARN",f"Skipping file without S00E00 pattern: {Style.RESET_ALL}{file}")
                 continue
 
             episode_identifier = episode_match.group(2)
@@ -242,14 +264,20 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
                 new_name = name
             
             resolution = extract_resolution(new_name)
+            #log_message("DEBUG", f"Resolution from file = {resolution}")
             if not resolution:
                 resolution = extract_resolution_from_folder(parent_folder_name)
+                #log_message("DEBUG",f"Resolution from folder = {resolution}")
+                if resolution is not None:
+                    resolution = f" {resolution}"
             if resolution:
                 split_name = new_name.split(resolution)[0]
                 if split_name.endswith("("):
                     new_name = split_name[:-1] + resolution + ext
+                    #log_message("DEBUG",f"symlink name: {new_name}")
                 else:
                     new_name = split_name + resolution + ext
+                    #log_message("DEBUG",f"symlink name: {new_name}")
             else:
                 new_name += ext
 
@@ -281,14 +309,14 @@ def create_symlinks(src_dir, dest_dir, force=False, id='tmdb'):
                     os.remove(dest_file)
             
             if os.path.exists(dest_file) and not os.path.islink(dest_file):
-                print(f"Skipping existing file: {dest_file}")
                 continue
 
             if os.path.isdir(src_file):
                 shutil.copytree(src_file, dest_file, symlinks=True)
             else:
                 os.symlink(src_file, dest_file)
-            print(f"Created symlink: {dest_file} -> {src_file}")
+            clean_destination = os.path.basename(dest_file)
+            log_message("SUCCESS",f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
 if __name__ == "__main__":
     settings = get_settings()
@@ -298,7 +326,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if 'src_dir' not in settings or 'dest_dir' not in settings or 'id' not in settings:
-        print("Missing configuration in settings.json. Please provide necessary inputs.")
+        log_message("INFO",f"Missing configuration in settings.json. Please provide necessary inputs.{Style.RESET_ALL}")
         src_dir, dest_dir, id_choice = prompt_for_settings()
     else:
         src_dir = settings['src_dir']
