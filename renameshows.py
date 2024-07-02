@@ -177,7 +177,7 @@ def search_tv_show(query, year=None, id='tmdb', force=False):
             return f"{query}"
 
     except requests.exceptions.RequestException as e:
-        log_message("ERROR","Error fetching data: {e}")
+        log_message("ERROR",f"Error fetching data: {e}")
 
 def extract_year(query):
     match = re.search(r'\((\d{4})\)$', query.strip())
