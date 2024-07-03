@@ -10,6 +10,7 @@ This script was mainly designed around to work with a show folder in a zurg/rclo
 - Auto select tv show result (there will be bad matches and/or wrong grouping for shows with same names but different years)
 - Renames episodes according to plex's series naming convention (new feature)
 - Stores created symlinks and checks existing symlinks before processing files
+- filter out sample files
 
 ### Known issues/bugs
 - The first show that's processed doesn't get queried through TMDB.
