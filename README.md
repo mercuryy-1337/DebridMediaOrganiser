@@ -14,7 +14,7 @@ This script was mainly designed around to work with a show folder in a zurg/rclo
 
 ### Known issues/bugs
 - The first show that's processed doesn't get queried through TMDB.
-- Multi-episode files are named according to the first episode in the file. e.g 'showname.s01e01e02.mkv' becomes 'showname - s01e01 - show_info {resolution}.mkv'
+- ~~Multi-episode files are named according to the first episode in the file. e.g 'showname.s01e01e02.mkv' becomes 'showname - s01e01 - show_info {resolution}.mkv'~~ Now fixed.
 
 # Requirements
 - Python 3.x 
@@ -73,7 +73,7 @@ dest_dir/
 │   │   └── Show Name - S01E02 - show_info 1080p.mkv -> ../../../../src_dir/Show.Name.S01E02.1080p.mkv
 └── Another Show (2019) {tmdb-0002}
     ├── Season 2
-    │   └── Another Show - S02E01 - Episode 1 720p.mkv -> ../../../../src_dir/AnotherShow.S02E01.mkv
+    │   └── Another Show - S02E01-E02 720p.mkv -> ../../../../src_dir/AnotherShow.S02E01E02.mkv
 ```
 
 
