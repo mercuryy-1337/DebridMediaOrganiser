@@ -167,8 +167,20 @@ def search_tv_show(query, year=None, force=False):
         log_message("ERROR", f"Error fetching data: {e}")
         return f"{query}", ""
 
+def format_multi_match(match):
+    log_message('DEBUG', F'Match: {match}')
+    matched_string = match.group(0)
+    if '+' in matched_string or '-' in matched_string:
+        matched_string = matched_string.replace(' ', '')
+        return matched_string.replace('+', '-').upper()
+    parts = re.findall(r'S(\d{2,3})E(\d{2})(E\d{2})', matched_string, re.IGNORECASE)[0]
+    return f"S{parts[0]}E{parts[1]}-{parts[2].upper()}"
 
 def get_episode_details(show_id, show_name, episode_identifier, api_key):
+    match = re.search('(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
+    if match:
+        return f"{show_name} - {episode_identifier} "
+    
     season_number = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
     episode_number = int(re.search(r'S(\d{2}) ?E(\d{2})', episode_identifier, re.IGNORECASE).group(2))
     season_details_url = f"https://api.themoviedb.org/3/tv/{show_id}/season/{season_number}"
@@ -254,19 +266,32 @@ def create_symlinks(src_dir, dest_dir, force=False):
             if sample_match:
                 log_message('WARN',f'Skipping sample file: {file}')
                 continue
-            episode_match = re.search(r'(.*?)(S\d{2,3} ?E\d{2}|\d{1,2}x\d{2})', file, re.IGNORECASE)
+            episode_match = re.search(r'(.*?)(S\d{2} E\d{2}(?:\-E\d{2})?|\d{1,2}x\d{2}|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
                 log_message("WARN",f"Skipping file without S00E00 pattern: {Style.RESET_ALL}{file}")
                 continue
-            
             episode_identifier = episode_match.group(2)
+            
+            multiepisode_match = re.search(r'(S\d{2,3} ?E\d{2}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier, re.IGNORECASE)
             alt_episode_match = re.search(r'\d{1,2}x\d{2}', episode_identifier)
             edge_case_episode_match = re.search(r'S\d{3} ?E\d{2}',episode_identifier)
-            if alt_episode_match:
+            #log_message('DEBUG',f'Identified episode: {episode_identifier}')
+            if multiepisode_match:
+                #log_message('DEBUG',f'Identifier before: {episode_identifier}')
+                episode_identifier = re.sub(
+                    r'(S\d{2,3} ?E\d{2}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})',
+                    format_multi_match,
+                    episode_identifier,
+                    flags=re.IGNORECASE
+                )
+                #log_message('DEBUG', f'After: {episode_identifier}')
+            elif alt_episode_match:
                 episode_identifier = re.sub(r'(\d{1,2})x(\d{2})', r'S\2E\2', episode_identifier)
             elif edge_case_episode_match:
                 episode_identifier = re.sub(r'S(\d{3}) ?E(\d{2})', lambda m: f'S{int(m.group(1)):d}E{m.group(2)}', episode_identifier)
-
+            
+            #log_message('DEBUG',f'Identifier: {episode_identifier}')    
+                
             parent_folder_name = os.path.basename(root)
             folder_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*', '', parent_folder_name).replace('-',' ').replace('.',' ')
             #log_message('DEBUG',f'Folder: {folder_name}')
