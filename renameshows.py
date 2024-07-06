@@ -7,6 +7,7 @@ import json
 import time
 import difflib
 import pickle
+import subprocess
 from functools import lru_cache
 from colorama import init, Fore, Style
 
@@ -247,12 +248,12 @@ def create_symlinks(src_dir, dest_dir, force=False):
     os.makedirs(dest_dir, exist_ok=True)
     log_message('DEBUG','processing...')
     existing_symlinks = load_links(links_pkl)
+    symlink_created = []
     for root, dirs, files in os.walk(src_dir):
         for file in files:
             src_file = os.path.join(root, file)
             
             symlink_exists = False
-            
              # Check if symlink exists based on previously created symlinks (from media.pkl)
             symlink_exists |= any(
                 src_file == existing_src_file
@@ -266,13 +267,13 @@ def create_symlinks(src_dir, dest_dir, force=False):
             if sample_match:
                 log_message('WARN',f'Skipping sample file: {file}')
                 continue
-            episode_match = re.search(r'(.*?)(S\d{2} E\d{2}(?:\-E\d{2})?|\d{1,2}x\d{2}|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
+            episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\d{1,2}x\d{2}|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
-                log_message("WARN",f"Skipping file without S00E00 pattern: {Style.RESET_ALL}{file}")
+                #log_message("WARN",f"Skipping file without S00E00 pattern: {Style.RESET_ALL}{file}")
                 continue
             episode_identifier = episode_match.group(2)
             
-            multiepisode_match = re.search(r'(S\d{2,3} ?E\d{2}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier, re.IGNORECASE)
+            multiepisode_match = re.search(r'(S\d{2,3} ?E\d{2,3}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier, re.IGNORECASE)
             alt_episode_match = re.search(r'\d{1,2}x\d{2}', episode_identifier)
             edge_case_episode_match = re.search(r'S\d{3} ?E\d{2}',episode_identifier)
             #log_message('DEBUG',f'Identified episode: {episode_identifier}')
@@ -293,7 +294,7 @@ def create_symlinks(src_dir, dest_dir, force=False):
             #log_message('DEBUG',f'Identifier: {episode_identifier}')    
                 
             parent_folder_name = os.path.basename(root)
-            folder_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*', '', parent_folder_name).replace('-',' ').replace('.',' ')
+            folder_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*|(\d{3,4}p)', '', parent_folder_name).replace('-',' ').replace('.',' ')
             #log_message('DEBUG',f'Folder: {folder_name}')
             #log_message('DEBUG',f'parent folder: {parent_folder_name}')
             if re.match(r'S\d{2} ?E\d{2}', file, re.IGNORECASE):
@@ -313,7 +314,7 @@ def create_symlinks(src_dir, dest_dir, force=False):
             else:
                 new_name = name
 
-            season_number = re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1)
+            season_number = re.search(r'S(\d{2}) ?E\d{2,3}', episode_identifier, re.IGNORECASE).group(1)
             season_folder = f"Season {int(season_number)}"
             
             
@@ -384,14 +385,18 @@ def create_symlinks(src_dir, dest_dir, force=False):
                 os.symlink(src_file, dest_file)
                 existing_symlinks.add((src_file, dest_file))
                 save_link(existing_symlinks, links_pkl)
+                symlink_created.append(dest_file)
             clean_destination = os.path.basename(dest_file)
             log_message("SUCCESS",f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
+    return symlink_created
+            
 
 if __name__ == "__main__":
     settings = get_settings()
 
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
     parser.add_argument("--force", action="store_true", help="Disregards user input and automatically chooses the first option")
+    parser.add_argument("--loop", action="store_true", help= "Automatically runs the script every 5 minutes with results being automatically chose")
     args = parser.parse_args()
     
     if 'src_dir' not in settings or 'dest_dir' not in settings:
@@ -401,4 +406,13 @@ if __name__ == "__main__":
         src_dir = settings['src_dir']
         dest_dir = settings['dest_dir']
 
-    create_symlinks(src_dir, dest_dir, force=args.force)
+    if args.loop:
+        while True:
+            if create_symlinks(src_dir, dest_dir, force=True):
+                log_message('SUCCESS', 'Attempting to update Plex Library sections')
+                subprocess.run(['sh', 'plex_update.sh'], check=True)
+            log_message('DEBUG', "Sleeping for 5 minutes before next run...")
+            time.sleep(300)
+    if create_symlinks(src_dir, dest_dir, force=args.force):
+        log_message('SUCCESS', 'Attempting to update Plex Library sections')
+        subprocess.run(['sh', 'plex_update.sh'], check=True)      
