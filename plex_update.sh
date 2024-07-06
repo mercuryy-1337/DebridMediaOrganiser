@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # PLEX PARTIAL SCAN script or PLEX UPDATE script (Docker)
-# When the show script is finished symlinking, it will trigger this script
+# When the script is finished symlinking, it will trigger this sh executable
 # on_library_update: sh plex_update.sh "$@"
 
 # dockerip=$(/sbin/ip route|awk '/default/ { print $3 }') # if zurg is running inside a Docker container
@@ -13,12 +13,12 @@ plexip=$localip # replace with your Plex IP
 plex_url="http://$plexip:32400"
 echo "Detected Plex URL inside Docker container: $plex_url"
 token="yourplextoken" # open Plex in a browser, open dev console and copy-paste this: window.localStorage.getItem("myPlexAccessToken")
-shows_dir="/path/to/your/showsdir" # replace with your RD shows directory path, ensure this is what Plex sees
+shows_dir="/mnt/shows" # replace with your rclone shows directory path, ensure this is what Plex sees
 
 # Get the library sections
 sections=$(curl -s "$plex_url/library/sections?X-Plex-Token=$token")
 
-# Extract the section ID for the Shows directory
+# Extract the section ID for the Anime directory
 section_id=$(echo "$sections" | xmllint --xpath "string(//Directory[./Location/@path='$shows_dir']/@key)" -)
 
 if [ -z "$section_id" ]; then
