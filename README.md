@@ -11,10 +11,15 @@ This script was mainly designed around to work with a show folder in a zurg/rclo
 - Renames episodes according to plex's series naming convention (new feature)
 - Stores created symlinks and checks existing symlinks before processing files
 - filter out sample files
+- refresh plex library upon successful creation of symlinks
 
 ### Known issues/bugs
 - The first show that's processed doesn't get queried through TMDB.
 - ~~Multi-episode files are named according to the first episode in the file. e.g 'showname.s01e01e02.mkv' becomes 'showname - s01e01 - show_info {resolution}.mkv'~~ Now fixed.
+
+### N.B
+- This script is designed to work in a linux environment as Plex on windows doesn't resolve symlinks properly
+- This script completeley disregards specials if they're not formatted like normal episodes e.g 'S00E01 - Special.mkv' will be renamed and organised but something like '{showname} - Special.mkv' will be skipped
 
 # Requirements
 - Python 3.x 
@@ -25,20 +30,26 @@ This script was mainly designed around to work with a show folder in a zurg/rclo
 # Installation
 1. Clone Repository:
 ``` sh
-git clone https://github.com/mercuryy-1337/tmdb-tv-organiser.git
-cd tmdb-tv-organiser
+git clone https://github.com/mercuryy-1337/debridshowrenamer.git
+cd debridshowrenamer
 ```
 2. Install the required Python packages:
 ``` sh
 pip install requests colorama
 ```
-3. Get a TMDb API key:
+3. Install xmllint package if it doesn't exist
+```sh
+sudo apt install libxml2-utils
+```
+4. Get a TMDb API key:
 - Sign up on [TMDb](https://www.themoviedb.org/) if you don't already have an account.
 - Once you've signed up or logged in, go to your account settings
 - Head over to the API section then generate an API key.
 - Once the key is generated, copy the first "API Key" and store this for later.
 
-4. Run the script:
+5. Edit the plex_update.sh file with all the correct details
+
+6. Run the script:
 ``` sh
 python3 renameshows.py
 ```
@@ -46,7 +57,7 @@ python3 renameshows.py
 # Usage
 **Basic Usage:**
 ```sh
-python3 renameshows.py [--force]
+python3 renameshows.py [--force] [--loop]
 ```
 On the first run, the script will prompt you to enter the following settings, which will then be saved in settings.json for future use:
 1. Your TMDb API key. Used to authenticate requests to The Movie Database (TMDb) API, enabling access to TV show data such as titles, IDs and episode information. <br/>
@@ -54,6 +65,7 @@ On the first run, the script will prompt you to enter the following settings, wh
 3. Destination directory where the symlinks will be created and organised into (dest_dir). <br/>
 
 the optional --force flag enables the script to automatically select a result for TV show searches without requiring user input.
+the optional --loop flag enables the script to automatically run every 5 minutes and automatically choose a result for you
 
 
 ## Example
