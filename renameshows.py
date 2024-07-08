@@ -177,13 +177,17 @@ def format_multi_match(match):
     parts = re.findall(r'S(\d{2,3})E(\d{2})(E\d{2})', matched_string, re.IGNORECASE)[0]
     return f"S{parts[0]}E{parts[1]}-{parts[2].upper()}"
 
-def get_episode_details(show_id, show_name, episode_identifier, api_key):
+def get_episode_details(show_id, show_name, episode_identifier, api_key, simple=False):
     match = re.search('(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
         return f"{show_name} - {episode_identifier} "
-    
+        
     season_number = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
     episode_number = int(re.search(r'S(\d{2}) ?E(\d{2})', episode_identifier, re.IGNORECASE).group(2))
+    
+    if simple:
+        formatted_episode_number = f"S{season_number:02d}E{episode_number:02d} "
+        return f"{show_name} - {formatted_episode_number}"
     season_details_url = f"https://api.themoviedb.org/3/tv/{show_id}/season/{season_number}"
     try:
         season_response = requests.get(season_details_url, params={'api_key': api_key})
@@ -244,7 +248,7 @@ def get_unique_filename(dest_path, new_name):
         counter += 1
     return unique_name
 
-def create_symlinks(src_dir, dest_dir, force=False):
+def create_symlinks(src_dir, dest_dir, force=False, simple=False):
     os.makedirs(dest_dir, exist_ok=True)
     log_message('DEBUG','processing...')
     existing_symlinks = load_links(links_pkl)
@@ -348,7 +352,7 @@ def create_symlinks(src_dir, dest_dir, force=False):
                 year = re.search('\((\d{4})\)',show_folder).group(1)
                 episode_name = re.sub('\{(tmdb-\d+|imdb-tt\d+)\}','',show_folder).strip()
                 #log_message('DEBUG',f'{episode_name} {episode_identifier}{ext}')
-                new_name = get_episode_details(showid,episode_name,episode_identifier,get_api_key())
+                new_name = get_episode_details(showid,episode_name,episode_identifier,get_api_key(),simple)
                 #log_message('DEBUG',new_name)
                 #log_message('DEBUG',)
                 
@@ -397,6 +401,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
     parser.add_argument("--force", action="store_true", help="Disregards user input and automatically chooses the first option")
     parser.add_argument("--loop", action="store_true", help= "Automatically runs the script every 5 minutes with results being automatically chose")
+    parser.add_argument("--simple", action="store_true", help= "Individual episodes will not be queried through TMDb, will be renamed in a simple format")
     args = parser.parse_args()
     
     if 'src_dir' not in settings or 'dest_dir' not in settings:
@@ -408,11 +413,11 @@ if __name__ == "__main__":
 
     if args.loop:
         while True:
-            if create_symlinks(src_dir, dest_dir, force=True):
+            if create_symlinks(src_dir, dest_dir, force=True, simple=args.simple):
                 log_message('SUCCESS', 'Attempting to update Plex Library sections')
                 subprocess.run(['sh', 'plex_update.sh'], check=True)
             log_message('DEBUG', "Sleeping for 5 minutes before next run...")
             time.sleep(300)
-    if create_symlinks(src_dir, dest_dir, force=args.force):
+    if create_symlinks(src_dir, dest_dir, force=args.force, simple=args.simple):
         log_message('SUCCESS', 'Attempting to update Plex Library sections')
-        subprocess.run(['sh', 'plex_update.sh'], check=True)      
+        subprocess.run(['sh', 'plex_update.sh'], check=True)
