@@ -1,6 +1,6 @@
 # debridshowrenamer
 A Python script designed to organize unorganized TV show torrents by creating symbolic links in a structured format. The script utilizes The Movie Database (TMDb) API to fetch the proper TV show names and creates symlinks for episodes based on this information.
-This script was mainly designed around to work with a show folder in a zurg/rclone_rd mount.
+This script was mainly designed to work with a show folder in a zurg/rclone_rd mount but it can work with a folder that has a mix of both movies and shows.
 
 # Features
 - Fetches proper TV show names and optionally IMDb IDs from TMDb.
