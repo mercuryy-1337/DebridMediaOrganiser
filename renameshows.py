@@ -342,7 +342,7 @@ def create_symlinks(src_dir, dest_dir, force=False, simple=False):
                 new_name = name
 
             season_number = re.search(r'S(\d{2}) ?E\d{2,3}', episode_identifier, re.IGNORECASE).group(1)
-            season_folder = f"Season {int(season_number)}"
+            season_folder = f"Season {int(season_number):02d}"
             
             
             show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name)
@@ -378,14 +378,7 @@ def create_symlinks(src_dir, dest_dir, force=False, simple=False):
                 #log_message('DEBUG',)
                 
                 
-            if resolution:
-                split_name = new_name.split(resolution)[0]
-                if split_name.endswith("("):
-                    new_name = split_name[:-1] + resolution + ext
-                else:
-                    new_name = split_name + resolution + ext
-            else:
-                new_name = new_name.rstrip() + ext
+            new_name = new_name.rstrip() + ext
                 
             new_name = new_name.replace('/','')
             dest_path = os.path.join(dest_dir, show_folder, season_folder)
