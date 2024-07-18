@@ -11,7 +11,7 @@ This script was mainly designed to work with a show folder in a zurg/rclone_rd m
 - Renames episodes according to plex's series naming convention (new feature)
 - Stores created symlinks and checks existing symlinks before processing files
 - filter out sample files
-- refresh plex library upon successful creation of symlinks
+- Tries to match riven's naming scheme as much as possible
 
 ### Known issues/bugs
 - The first show that's processed doesn't get queried through TMDB.
@@ -30,7 +30,7 @@ This script was mainly designed to work with a show folder in a zurg/rclone_rd m
 # Installation
 1. Clone Repository:
 ``` sh
-git clone https://github.com/mercuryy-1337/debridshowrenamer.git
+git clone -b riven https://github.com/mercuryy-1337/debridshowrenamer.git
 cd debridshowrenamer
 ```
 2. Install the required Python packages:
@@ -57,15 +57,14 @@ python3 renameshows.py
 # Usage
 **Basic Usage:**
 ```sh
-python3 renameshows.py [--force] [--loop]
+python3 renameshows.py [--simple]
 ```
 On the first run, the script will prompt you to enter the following settings, which will then be saved in settings.json for future use:
 1. Your TMDb API key. Used to authenticate requests to The Movie Database (TMDb) API, enabling access to TV show data such as titles, IDs and episode information. <br/>
 2. Source directory containing the unorganized TV show files (src_dir). <br/>
-3. Destination directory where the symlinks will be created and organised into (dest_dir). <br/>
+3. Destination directory where the symlinks will be created and organised into (dest_dir), in this case it will be Riven's show directory path. <br/>
 
-the optional --force flag enables the script to automatically select a result for TV show searches without requiring user input.
-the optional --loop flag enables the script to automatically run every 5 minutes and automatically choose a result for you
+the optional --simple flag stops the script from querying individual episodes through TMDB and just renames the episodes into a simple format
 
 
 ## Example
