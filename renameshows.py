@@ -85,6 +85,27 @@ def get_settings():
             return json.load(file)
     return {}
 
+def get_imdb_id(tmdb_id, api_key):
+    url = f"https://api.themoviedb.org/3/tv/{tmdb_id}/external_ids?api_key={api_key}"
+
+    # Make the GET request
+    response = requests.get(url)
+
+    # Check if request was successful (status code 200)
+    if response.status_code == 200:
+        # Parse JSON response
+        tv_show_info = response.json()
+
+        # Check if IMDb ID is available in the response
+        if 'imdb_id' in tv_show_info:
+            return tv_show_info['imdb_id']
+        else:
+            print("IMDb ID not found for this TV show.")
+            return None
+    else:
+        print(f"Error accessing TMDb API. Status code: {response.status_code}")
+        return None
+
 @lru_cache(maxsize=None)
 def search_tv_show(query, year=None, force=False):
     cache_key = (query, year, id)
@@ -122,10 +143,11 @@ def search_tv_show(query, year=None, force=False):
             if chosen_show:
                 show_name = chosen_show.get('name')
                 show_id = chosen_show.get('id')
+                imdb_id = get_imdb_id(show_id,api_key)
                 first_air_date = chosen_show.get('first_air_date')
                 show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
                 if show_id:
-                    proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+                    proper_name = f"{show_name} ({show_year}) {{imdb-{imdb_id}}}"
                 else:
                     proper_name = f"{show_name} ({show_year})"
                 _api_cache[cache_key] = (proper_name, show_id)  # Store as tuple
@@ -149,10 +171,11 @@ def search_tv_show(query, year=None, force=False):
                 if chosen_show:
                     show_name = chosen_show.get('name')
                     show_id = chosen_show.get('id')
+                    imdb_id = get_imdb_id(show_id,api_key)
                     first_air_date = chosen_show.get('first_air_date')
                     show_year = first_air_date.split('-')[0] if first_air_date else "Unknown Year"
                     if show_id:
-                        proper_name = f"{show_name} ({show_year}) {{tmdb-{show_id}}}"
+                        proper_name = f"{show_name} ({show_year}) {{imdb-{imdb_id}}}"
                     else:
                         proper_name = f"{show_name} ({show_year})"
                     _api_cache[cache_key] = (proper_name, show_id)  # Store as tuple
@@ -351,9 +374,7 @@ def create_symlinks(src_dir, dest_dir, force=False, simple=False):
             if re.search('\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
                 year = re.search('\((\d{4})\)',show_folder).group(1)
                 episode_name = re.sub('\{(tmdb-\d+|imdb-tt\d+)\}','',show_folder).strip()
-                #log_message('DEBUG',f'{episode_name} {episode_identifier}{ext}')
                 new_name = get_episode_details(showid,episode_name,episode_identifier,get_api_key(),simple)
-                #log_message('DEBUG',new_name)
                 #log_message('DEBUG',)
                 
                 
@@ -361,10 +382,8 @@ def create_symlinks(src_dir, dest_dir, force=False, simple=False):
                 split_name = new_name.split(resolution)[0]
                 if split_name.endswith("("):
                     new_name = split_name[:-1] + resolution + ext
-                    #log_message("DEBUG",f"symlink name: {new_name}")
                 else:
                     new_name = split_name + resolution + ext
-                    #log_message("DEBUG",f"symlink name: {new_name}")
             else:
                 new_name = new_name.rstrip() + ext
                 
@@ -399,8 +418,6 @@ if __name__ == "__main__":
     settings = get_settings()
 
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
-    parser.add_argument("--force", action="store_true", help="Disregards user input and automatically chooses the first option")
-    parser.add_argument("--loop", action="store_true", help= "Automatically runs the script every 5 minutes with results being automatically chose")
     parser.add_argument("--simple", action="store_true", help= "Individual episodes will not be queried through TMDb, will be renamed in a simple format")
     args = parser.parse_args()
     
@@ -411,13 +428,5 @@ if __name__ == "__main__":
         src_dir = settings['src_dir']
         dest_dir = settings['dest_dir']
 
-    if args.loop:
-        while True:
-            if create_symlinks(src_dir, dest_dir, force=True, simple=args.simple):
-                log_message('SUCCESS', 'Attempting to update Plex Library sections')
-                subprocess.run(['sh', 'plex_update.sh'], check=True)
-            log_message('DEBUG', "Sleeping for 5 minutes before next run...")
-            time.sleep(300)
-    if create_symlinks(src_dir, dest_dir, force=args.force, simple=args.simple):
-        log_message('SUCCESS', 'Attempting to update Plex Library sections')
-        subprocess.run(['sh', 'plex_update.sh'], check=True)
+    if create_symlinks(src_dir, dest_dir, force=False, simple=args.simple):
+        log_message('SUCCESS', 'All Symlinks have been created!')
