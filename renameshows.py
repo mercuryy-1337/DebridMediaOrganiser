@@ -75,7 +75,7 @@ def prompt_for_settings():
     if 'api_key' not in settings or not settings['api_key']:
         api_key = prompt_for_api_key()
     src_dir = input("Enter the source directory path: ")
-    dest_dir = input("Enter the destination directory path: ")
+    dest_dir = input("Enter the destination directory path (Path to riven's show directoy e.g /mnt/riven/shows): \n")
     save_settings(api_key, src_dir, dest_dir)
     return src_dir, dest_dir
 
