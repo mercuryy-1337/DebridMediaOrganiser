@@ -75,7 +75,7 @@ def prompt_for_settings():
     if 'api_key' not in settings or not settings['api_key']:
         api_key = prompt_for_api_key()
     src_dir = input("Enter the source directory path: ")
-    dest_dir = input("Enter the destination directory path (Path to riven's show directoy e.g /mnt/riven/shows): \n")
+    dest_dir = input("Enter the destination directory path: ")
     save_settings(api_key, src_dir, dest_dir)
     return src_dir, dest_dir
 
@@ -203,13 +203,13 @@ def format_multi_match(match):
 def get_episode_details(show_id, show_name, episode_identifier, api_key, simple=False):
     match = re.search('(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
-        return f"{show_name} - {episode_identifier} "
+        return f"{show_name} - {episode_identifier.lower} "
         
     season_number = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
     episode_number = int(re.search(r'S(\d{2}) ?E(\d{2})', episode_identifier, re.IGNORECASE).group(2))
     
     if simple:
-        formatted_episode_number = f"S{season_number:02d}E{episode_number:02d} "
+        formatted_episode_number = f"s{season_number:02d}s{episode_number:02d} "
         return f"{show_name} - {formatted_episode_number}"
     season_details_url = f"https://api.themoviedb.org/3/tv/{show_id}/season/{season_number}"
     try:
@@ -221,10 +221,10 @@ def get_episode_details(show_id, show_name, episode_identifier, api_key, simple=
 
         if episode:
             episode_name = episode['name']
-            formatted_episode_number = f"S{season_number:02d}E{episode_number:02d}"
+            formatted_episode_number = f"s{season_number:02d}e{episode_number:02d}"
             return f"{show_name} - {formatted_episode_number} - {episode_name} "
         else:
-            formatted_episode_number = f"S{season_number:02d}E{episode_number:02d} "
+            formatted_episode_number = f"s{season_number:02d}e{episode_number:02d} "
             return f"{show_name} - {formatted_episode_number}"
 
     except requests.exceptions.RequestException as e:
