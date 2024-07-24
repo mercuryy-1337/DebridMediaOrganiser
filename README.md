@@ -22,7 +22,7 @@ Originally, this script was designed to work with a show folder in a zurg/rclone
 
 ### To-Do
 
-- [ ] Enhance the speed bu processing movies quicker
+- [ ] Enhance the speed by processing movies quicker
 - [ ] Implement looping to allow the script to automatically create symlinks without user input
 
 
