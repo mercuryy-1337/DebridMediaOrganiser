@@ -20,6 +20,12 @@ Originally, this script was designed to work with a show folder in a zurg/rclone
 - This script is designed to work in a linux environment as Plex on windows doesn't resolve symlinks properly
 - This script completeley disregards specials if they're not formatted like normal episodes e.g 'S00E01 - Special.mkv' will be renamed and organised but something like '{showname} - Special.mkv' will be skipped
 
+### To-Do
+
+- [ ] Enhance the speed bu processing movies quicker
+- [ ] Implement looping to allow the script to automatically create symlinks without user input
+
+
 # Requirements
 - Python 3.x 
 - pip package manager
