@@ -418,10 +418,17 @@ def process_movie(file, foldername):
         year = match.group(2).strip('()')
         #resolution = match.group(3)
     proper_name = get_movie_info(title, year)
+    if year is None or year == "":
+        if proper_name is None:
+            proper_name = title
+    else:
+        if proper_name is None:
+            proper_name = f"{title} ({year})"
     
     return proper_name, ext
 
 def process_anime(file, pattern1, pattern2, split=False):
+    
     file = re.sub(r'^\[.*?\]\s*', '', file)
     name, ext = os.path.splitext(file)
     
@@ -451,6 +458,7 @@ def process_anime(file, pattern1, pattern2, split=False):
         
         return show_name, season_number, name, showdir
         
+
 
 def create_symlinks(src_dir, dest_dir, force=False, split=False):
     os.makedirs(dest_dir, exist_ok=True)
@@ -484,7 +492,7 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     season_folder = f"Season {int(season_number):02d}"
                     is_anime = True
                 else:
-                    continue # comment this line to process movies
+                    #continue
                     is_movie = True
                     movie_folder_name = os.path.basename(root)
                     movie_name, ext = process_movie(file, movie_folder_name)
