@@ -233,7 +233,7 @@ def get_movie_info(title, year=None):
 
 def get_series_info(series_name, year=None, split=False):
     global _api_cache
-    #log_message("INFO", f"Current file: {series_name} year: {year}")
+    log_message("DEBUG", f"Current file: {series_name} year: {year}")
     shows_dir = "shows"
     formatted_name = series_name.replace(" ", "%20")
     cache_key = f"series_{formatted_name}_{year}"
@@ -576,7 +576,7 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 if file_name:
                     new_name = file_name.group(0) + ' '
                 if re.search(r'\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
-                    year = re.search('\((\d{4})\)',show_folder).group(1)
+                    year = re.search(r'\((\d{4})\)',show_folder).group(1)
                     new_name = get_episode_details(showid ,episode_identifier)
                     #log_message('DEBUG',)    
                 new_name = new_name.rstrip() + ext
