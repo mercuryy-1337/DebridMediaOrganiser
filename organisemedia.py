@@ -485,7 +485,7 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 continue
             episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
-                pattern = re.compile(r'(.*) - (\d{2,4})(?: (\[?\(?\d{3,4}p\)?\]?))?')
+                pattern = re.compile(r'(.*) - (\d{2,3}\b)(?: (\[?\(?\d{3,4}p\)?\]?))?')
                 alt_pattern =  re.compile(r'S(\d{1,2}) - (\d{2})')
                 if re.search(pattern, file) or re.search(alt_pattern, file):
                     show_folder, season_number, new_name, media_dir = process_anime(file, pattern, alt_pattern, split)
