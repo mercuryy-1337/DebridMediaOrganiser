@@ -152,7 +152,7 @@ def get_movie_info(title, year=None):
         response = requests.get(url)
         
         if response.status_code == 404:
-            imdb_id = input("Movie not found. Please enter the IMDb ID: ")
+            imdb_id = input(f"Movie {title} not found. Please enter the IMDb ID: ")
             if imdb_id:
                 url = f"https://v3-cinemeta.strem.io/catalog/movie/top/search={imdb_id}.json"
                 response = requests.get(url)
@@ -334,7 +334,7 @@ def get_episode_details(series_id, episode_identifier):
     meta = series_details.get('meta', [])
     year = meta.get('releaseInfo')  
     year = re.match(r'\b\d{4}\b', year).group()
-    match = re.search('(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
+    match = re.search(r'(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
         return f"{meta.get('name')} ({year}) - {episode_identifier.lower()}"
         
@@ -575,9 +575,8 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 file_name = re.search(r'(^.*S\d{2}E\d{2})',new_name)
                 if file_name:
                     new_name = file_name.group(0) + ' '
-                if re.search('\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
+                if re.search(r'\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
                     year = re.search('\((\d{4})\)',show_folder).group(1)
-                    episode_name = re.sub('\{(tmdb-\d+|imdb-tt\d+)\}','',show_folder).strip()
                     new_name = get_episode_details(showid ,episode_identifier)
                     #log_message('DEBUG',)    
                 new_name = new_name.rstrip() + ext
