@@ -452,11 +452,12 @@ async def process_anime(file, pattern1, pattern2, split=False):
         episode_number = match.group(2)
         resolution = match.group(3)
         
-        #log_message('INFO', f'Anime file: {file}')
+        
         
         if show_name in season_cache:
             season_number = season_cache[show_name]
         else:
+            log_message('INFO', f'Anime file: {file}')
             season_number = await aioconsole.ainput("Enter the season number for the above show: ")
             season_cache[show_name] = season_number
         
