@@ -338,19 +338,24 @@ def format_multi_match(match):
     parts = re.findall(r'S(\d{2,3})E(\d{2})(E\d{2})', matched_string, re.IGNORECASE)[0]
     return f"S{parts[0]}E{parts[1]}-{parts[2].upper()}"
 
-def get_episode_details(series_id, episode_identifier):
+def get_episode_details(series_id, episode_identifier, name, year):
     
     details_url = f"https://v3-cinemeta.strem.io/meta/series/{series_id}.json"
+    #print(details_url)
     response = requests.get(details_url)
     if response.status_code != 200:
         raise Exception(f"Error getting series details: {response.status_code}")
     series_details = response.json()
     meta = series_details.get('meta', [])
-    year = meta.get('releaseInfo')  
+    releaseInfo = meta.get('releaseInfo')  
+    if releaseInfo is None:
+        year = year
+    else:
+        year = releaseInfo    
     year = re.match(r'\b\d{4}\b', year).group()
     match = re.search(r'(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
-        return f"{meta.get('name')} ({year}) - {episode_identifier.lower()}"
+        return f"{name} ({year}) - {episode_identifier.lower()}"
         
         
     season = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
@@ -360,6 +365,8 @@ def get_episode_details(series_id, episode_identifier):
     for video in videos:
         if video['season'] == season and (video.get('episode') == episode or video.get('number') == episode):
             show_name = meta.get('name')
+            if show_name is None:
+                show_name = name
             if video.get('title') is None:
                 title = video.get('name')
             else:
@@ -457,7 +464,7 @@ async def process_anime(file, pattern1, pattern2, split=False):
         if show_name in season_cache:
             season_number = season_cache[show_name]
         else:
-            log_message('INFO', f'Anime file: {file}')
+            log_message('INFO', f'Anime Show: {show_name}')
             season_number = await aioconsole.ainput("Enter the season number for the above show: ")
             season_cache[show_name] = season_number
         
@@ -468,7 +475,8 @@ async def process_anime(file, pattern1, pattern2, split=False):
         
         episode_identifier = f"s{int(season_number):02d}e{int(episode_number):03d}"
         show_name, showid, showdir = await get_series_info(show_name.strip(), "", split)
-        name = get_episode_details(showid, episode_identifier)
+        year = re.search(r'\((\d{4})\)', show_name).group(1)
+        name = get_episode_details(showid, episode_identifier, show_name, year)
         name = name.strip() + ext
         
         return show_name, season_number, name, showdir
@@ -627,7 +635,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     new_name = file_name.group(0) + ' '
                 if re.search(r'\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
                     year = re.search(r'\((\d{4})\)', show_folder).group(1)
-                    new_name = get_episode_details(showid, episode_identifier)
+                    new_name = get_episode_details(showid, episode_identifier, show_folder, year)
                     
                 new_name = new_name.rstrip() + ext
 
