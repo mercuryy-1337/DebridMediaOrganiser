@@ -7,16 +7,12 @@ import json
 import time
 import difflib
 import pickle
-import xml.etree.ElementTree as ET
-from functools import lru_cache
+from collections import defaultdict
+import asyncio, aioconsole, aiohttp
 from colorama import init, Fore, Style
-from urllib.parse import urlencode
 
 init(autoreset=True)
 
-anime_titles_set = None
-last_fetched_time = 0
-fetch_interval = 1800
 
 SETTINGS_FILE = 'settings.json'
 links_pkl = 'symlinks.pkl'
@@ -25,11 +21,15 @@ season_cache = {}
 
 LOG_LEVELS = {
     "SUCCESS": {"level": 10, "color": Fore.LIGHTGREEN_EX},
-    "INFO": {"level": 20, "color": Fore.BLUE},
+    "INFO": {"level": 20, "color": Fore.LIGHTBLUE_EX},
     "ERROR": {"level": 30, "color": Fore.RED},
     "WARN": {"level": 40, "color": Fore.YELLOW},
     "DEBUG": {"level": 50, "color": Fore.LIGHTMAGENTA_EX}
 }
+
+print_lock = asyncio.Lock()
+input_lock = asyncio.Lock()
+
 
 def log_message(log_level, message):
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -73,18 +73,27 @@ def get_api_key():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, 'r') as file:
             settings = json.load(file)
-            return settings.get('api_key')
+            if settings['api_key']:
+                return settings.get('api_key')
+            else:
+                return None
     return None
 
 def prompt_for_api_key():
     api_key = input("Please enter your TMDb API key: ")
-    return api_key
+    
+    try:
+        with open(SETTINGS_FILE, 'r') as file:
+            settings = json.load(file)
+    except FileNotFoundError:
+        settings = {}
+    
+    settings['api_key'] = api_key
+    
+    with open(SETTINGS_FILE, 'w') as file:
+        json.dump(settings, file, indent=4)
 
-def prompt_for_settings(split=False):
-    api_key = ""
-    if split:
-        if 'api_key' not in settings or not settings['api_key']:
-            api_key = prompt_for_api_key()
+def prompt_for_settings(api_key):
     src_dir = input("Enter the source directory path: ")
     dest_dir = input("Enter the destination directory path: ")
     save_settings(api_key, src_dir, dest_dir)
@@ -113,7 +122,7 @@ def get_moviedb_id(imdbid):
             if 'moviedb_id' in movie_info:
                 return movie_info['moviedb_id']
             else:
-                print("moviedb_id not found in movie_info")
+                log_message('WARN',"moviedb_id not found in movie_info")
                 return None
         else:
             return None
@@ -139,7 +148,7 @@ def is_anime(moviedb_id):
         print(f"Error fetching data: {e}")
         return False
     
-def get_movie_info(title, year=None):
+async def get_movie_info(title, year=None):
     global _api_cache
     formatted_title = title.replace(" ", "%20")
     cache_key = f"movie_{formatted_title}_{year}"
@@ -148,92 +157,96 @@ def get_movie_info(title, year=None):
         return _api_cache[cache_key]
     
     url = f"https://v3-cinemeta.strem.io/catalog/movie/top/search={formatted_title}.json"
-    try:
-        response = requests.get(url)
-        
-        if response.status_code == 404:
-            imdb_id = input("Movie not found. Please enter the IMDb ID: ")
-            if imdb_id:
-                url = f"https://v3-cinemeta.strem.io/catalog/movie/top/search={imdb_id}.json"
-                response = requests.get(url)
-            else:
-                log_message('WARN', "IMDB id not provided, returning default title and dir")
-                return title
-        
-        response.raise_for_status()
+    async with aiohttp.ClientSession() as session:
         try:
-            movie_data = response.json()
-        except requests.exceptions.JSONDecodeError:
-            print("Error decoding JSON response")
-            return None
-        
-        if 'metas' in movie_data and movie_data['metas']:
-            movie_options = movie_data['metas']
-            matched = False
-            for movie_info in movie_options:
-                imdb_id = movie_info.get('imdb_id')
-                movie_title = movie_info.get('name')
-                year_info = movie_info.get('releaseInfo')
-                
-                if are_similar(title.lower().strip(), movie_title.lower(), 0.90):
-                    proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
-                    _api_cache[cache_key] = (proper_name)
-                    return proper_name
-            
-            if not matched:
-                print(f"No exact match found for {title}. Please choose from the following options or enter IMDb ID directly:")
-                for i, movie_info in enumerate(movie_options[:3]):
-                    imdb_id = movie_info.get('imdb_id')
-                    movie_title = movie_info.get('name')
-                    year_info = movie_info.get('releaseInfo')
-                    print(f"{i+1}. {movie_title} ({year_info})")
-                
-                choice = input("Enter the number of your choice, or enter IMDb ID directly: ")
-                if choice.lower().startswith('tt'):
-                    imdb_id = choice
-                    url = f"https://cinemeta-live.strem.io/meta/movie/{imdb_id}.json"
-                    response = requests.get(url)
-                    if response.status_code == 200:
-                        movie_data = response.json()
-                        if 'meta' in movie_data and movie_data['meta']:
-                            movie_info = movie_data['meta']
-                            imdb_id = movie_info.get('imdb_id')
-                            movie_title = movie_info.get('name')
-                            year_info = movie_info.get('releaseInfo')
-                            proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
-                            _api_cache[cache_key] = (proper_name)
-                            return proper_name
+            async with session.get(url) as response:
+                async with print_lock:
+                    if response.status == 404:
+                        imdb_id = await aioconsole.ainput(f"{Fore.YELLOW}Movie '{title}' not found. {Fore.WHITE}Please enter the IMDb ID: ")
+                        if imdb_id:
+                            url = f"https://v3-cinemeta.strem.io/catalog/movie/top/search={imdb_id}.json"
+                            async with session.get(url) as response:
+                                pass
                         else:
-                            print("No movie found with the provided IMDb ID")
+                            log_message('WARN', "IMDB id not provided, returning default title and dir")
                             return title
-                    else:
-                        print("Error fetching movie information with IMDb ID")
+
+                    if response.status != 200:
+                        log_message('ERROR', f"Error fetching movie information: HTTP {response.status}")
                         return title
-                else:
-                    try:
-                        choice = int(choice) - 1
-                        if 0 <= choice < len(movie_options[:3]):
-                            chosen_movie = movie_options[choice]
-                            imdb_id = chosen_movie.get('imdb_id')
-                            movie_title = chosen_movie.get('name')
-                            year_info = chosen_movie.get('releaseInfo')
+
+                try:
+                    movie_data = await response.json()
+                except aiohttp.ContentTypeError:
+                    log_message('ERROR', "Error decoding JSON response")
+                    return None
+
+                if 'metas' in movie_data and movie_data['metas']:
+                    movie_options = movie_data['metas']
+                    matched = False
+                    for movie_info in movie_options:
+                        imdb_id = movie_info.get('imdb_id')
+                        movie_title = movie_info.get('name')
+                        year_info = movie_info.get('releaseInfo')
+                        
+                        if are_similar(title.lower().strip(), movie_title.lower(), 0.90):
                             proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
+                            _api_cache[cache_key] = proper_name
                             return proper_name
-                        else:
-                            print("Invalid choice")
-                            return title
-                    except ValueError:
-                        print("Invalid input")
-                        return title
-    except requests.exceptions.RequestException as e:
-        log_message('ERROR', f"Error fetching movie information: {e}")
-        title = f'{title} {year}'
-        return title
+                    
+                    if not matched:
+                        async with print_lock:
+                            log_message('WARN', f"No exact match found for {title}. Please choose from the following options or enter IMDb ID directly:")
+                            for i, movie_info in enumerate(movie_options[:3]):
+                                imdb_id = movie_info.get('imdb_id')
+                                movie_title = movie_info.get('name')
+                                year_info = movie_info.get('releaseInfo')
+                                log_message('INFO', f"{i+1}. {movie_title} ({year_info})")
+                            choice = await aioconsole.ainput("Enter the number of your choice, or enter IMDb ID directly: ")
+                            if choice.lower().startswith('tt'):
+                                imdb_id = choice
+                                url = f"https://cinemeta-live.strem.io/meta/movie/{imdb_id}.json"
+                                async with session.get(url) as response:
+                                    if response.status == 200:
+                                        movie_data = await response.json()
+                                        if 'meta' in movie_data and movie_data['meta']:
+                                            movie_info = movie_data['meta']
+                                            imdb_id = movie_info.get('imdb_id')
+                                            movie_title = movie_info.get('name')
+                                            year_info = movie_info.get('releaseInfo')
+                                            proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
+                                            _api_cache[cache_key] = proper_name
+                                            return proper_name
+                                        else:
+                                            log_message('ERROR', "No movie found with the provided IMDb ID")
+                                            return title
+                                    else:
+                                        log_message('ERROR', "Error fetching movie information with IMDb ID")
+                                        return title
+                            else:
+                                try:
+                                    choice = int(choice) - 1
+                                    if 0 <= choice < len(movie_options[:3]):
+                                        chosen_movie = movie_options[choice]
+                                        imdb_id = chosen_movie.get('imdb_id')
+                                        movie_title = chosen_movie.get('name')
+                                        year_info = chosen_movie.get('releaseInfo')
+                                        proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
+                                        return proper_name
+                                    else:
+                                        log_message('WARN', f"Invalid choice, returning '{title}'")
+                                        return title
+                                except ValueError:
+                                    log_message('WARN', f"Invalid input, returning '{title}'")
+                                    return title
+        except aiohttp.ClientError as e:
+            log_message('ERROR', f"Error fetching movie information: {e}")
+            return f'{title} {year}'
 
 
-def get_series_info(series_name, year=None, split=False):
+async def get_series_info(series_name, year=None, split=False):
     global _api_cache
-    #log_message("INFO", f"Current file: {series_name} year: {year}")
+    #log_message("DEBUG", f"Current file: {series_name} year: {year}")
     shows_dir = "shows"
     formatted_name = series_name.replace(" ", "%20")
     cache_key = f"series_{formatted_name}_{year}"
@@ -254,11 +267,11 @@ def get_series_info(series_name, year=None, split=False):
     
     if not year:
         if len(metas) > 1 and are_similar(metas[0]['name'], metas[1]['name'], 0.9):
-            print(Fore.GREEN + f"Found multiple results for '{series_name}':")
+            print(Fore.GREEN + f"Found multiple results for '{series_name}, Year: {year}':")
             for i, meta in enumerate(metas[:3]):
                 print(Fore.CYAN + f"{i + 1}: {meta['name']} ({meta.get('releaseInfo', 'Unknown year')})")
                 
-            selected_index = input(Fore.GREEN + "Enter the number of the correct result (or press Enter to choose the first option): " + Style.RESET_ALL)
+            selected_index = await aioconsole.ainput(Fore.GREEN + "Enter the number of the correct result (or press Enter to choose the first option): " + Style.RESET_ALL)
             if selected_index.strip().isdigit() and 1 <= int(selected_index) <= len(metas):
                 selected_index = int(selected_index) - 1
             else:
@@ -268,7 +281,7 @@ def get_series_info(series_name, year=None, split=False):
             for i, meta in enumerate(metas[:3]):
                 print(Fore.CYAN + f"{i + 1}: {meta['name']} ({meta.get('releaseInfo', 'Unknown year')})")
                 
-            selected_index = input(Fore.GREEN + "Enter the number of your choice, or enter IMDb ID directly:  " + Style.RESET_ALL)
+            selected_index = await aioconsole.ainput(Fore.GREEN + "Enter the number of your choice, or enter IMDb ID directly:  " + Style.RESET_ALL)
             if selected_index.lower().startswith('tt'):
                 url = f"https://v3-cinemeta.strem.io/meta/series/{selected_index}.json"
                 response = requests.get(url)
@@ -282,6 +295,7 @@ def get_series_info(series_name, year=None, split=False):
                             year_info = re.match(r'\b\d{4}\b', year_info).group()
                             series_info = f"{show_title} ({year_info}) {{imdb-{imdb_id}}}"
                             if split:
+                                log_message('DEBUG', f"dir before: {shows_dir}")
                                 shows_dir = "anime_shows" if is_anime(get_moviedb_id(imdb_id)) else "shows"
                             _api_cache[cache_key] = (series_info, imdb_id, shows_dir)
                             return series_info, imdb_id, shows_dir
@@ -334,7 +348,7 @@ def get_episode_details(series_id, episode_identifier):
     meta = series_details.get('meta', [])
     year = meta.get('releaseInfo')  
     year = re.match(r'\b\d{4}\b', year).group()
-    match = re.search('(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
+    match = re.search(r'(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
         return f"{meta.get('name')} ({year}) - {episode_identifier.lower()}"
         
@@ -393,9 +407,9 @@ def get_unique_filename(dest_path, new_name):
         counter += 1
     return unique_name
 
-def process_movie(file, foldername):
+async def process_movie(file, foldername):
     path = f"/{foldername}"
-    #log_message("DEBUG", f"Current file: {os.path.join(path,file)}")
+    #log_message("DEBUG", f"Current Movie file: {os.path.join(path,file)}")
     
     moviename = re.sub(r'^\[.*?\]\s*', '', foldername)
     moviename = re.sub(r"^\d\. ", "", moviename)
@@ -417,11 +431,18 @@ def process_movie(file, foldername):
         title = match.group(1)
         year = match.group(2).strip('()')
         #resolution = match.group(3)
-    proper_name = get_movie_info(title, year)
+    proper_name = await get_movie_info(title, year)
+    if year is None or year == "":
+        if proper_name is None:
+            proper_name = title
+    else:
+        if proper_name is None:
+            proper_name = f"{title} ({year})"
     
     return proper_name, ext
 
-def process_anime(file, pattern1, pattern2, split=False):
+async def process_anime(file, pattern1, pattern2, split=False):
+    
     file = re.sub(r'^\[.*?\]\s*', '', file)
     name, ext = os.path.splitext(file)
     
@@ -445,18 +466,66 @@ def process_anime(file, pattern1, pattern2, split=False):
             show_name = ' '.join(show_name.split(' ')[:-1])
         
         episode_identifier = f"s{int(season_number):02d}e{int(episode_number):03d}"
-        show_name, showid, showdir = get_series_info(show_name.strip(), "", split)
+        show_name, showid, showdir = await get_series_info(show_name.strip(), "", split)
         name = get_episode_details(showid, episode_identifier)
         name = name.strip() + ext
         
         return show_name, season_number, name, showdir
         
 
-def create_symlinks(src_dir, dest_dir, force=False, split=False):
+
+async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl):
+    movie_name, ext = await process_movie(movie_name, movie_folder_name)
+    movie_name = movie_name.replace("/", " ")
+    new_name = movie_name + ext
+
+    dest_path = os.path.join(dest_dir, "movies", movie_name)
+    os.makedirs(dest_path, exist_ok=True)
+    dest_file = os.path.join(dest_path, new_name)
+
+    if os.path.islink(dest_file):
+        if os.readlink(dest_file) == src_file:
+            return
+        else:
+            new_name = get_unique_filename(dest_path, new_name)
+            dest_file = os.path.join(dest_path, new_name)
+
+    if os.path.exists(dest_file) and not os.path.islink(dest_file):
+        return
+
+    if os.path.isdir(src_file):
+        shutil.copytree(src_file, dest_file, symlinks=True)
+    else:
+        os.symlink(src_file, dest_file)
+        existing_symlinks.add((src_file, dest_file))
+        save_link(existing_symlinks, links_pkl)
+    
+    clean_destination = os.path.basename(dest_file)
+    async with print_lock:
+        log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
+
+async def process_movies_in_batches(movies_cache, batch_size=5):
+    tasks = []
+    for movie_name, movie_details in movies_cache.items():
+        for movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl in movie_details:
+            tasks.append(process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
+            if len(tasks) == batch_size:
+                await asyncio.gather(*tasks)
+                tasks = []
+    
+    # Process any remaining tasks that didn't fill up a batch
+    if tasks:
+        await asyncio.gather(*tasks)
+
+    movies_cache.clear()
+
+async def create_symlinks(src_dir, dest_dir, force=False, split=False):
     os.makedirs(dest_dir, exist_ok=True)
-    log_message('DEBUG','processing...')
+    log_message('DEBUG', 'processing...')
     existing_symlinks = load_links(links_pkl)
     symlink_created = []
+    movies_cache = defaultdict(list)
+    
     for root, dirs, files in os.walk(src_dir):
         for file in files:
             src_file = os.path.join(root, file)
@@ -464,70 +533,63 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
             is_movie = False
             media_dir = "shows"
             symlink_exists = False
-             # Check if symlink exists based on previously created symlinks (from symlinks.pkl)
+
             symlink_exists |= any(
                 src_file == existing_src_file
                 for existing_src_file, _ in existing_symlinks  
             )
             if symlink_exists:
                 continue
+
             sample_match = re.search('sample', file, re.IGNORECASE)
             if sample_match:
-                log_message('WARN',f'Skipping sample file: {file}')
+                log_message('WARN', f'Skipping sample file: {file}')
                 continue
+
             episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
-                pattern = re.compile(r'(.*) - (\d{2,4})(?: (\[?\(?\d{3,4}p\)?\]?))?')
-                alt_pattern =  re.compile(r'S(\d{1,2}) - (\d{2})')
+                pattern = re.compile(r'(.*) - (\d{2,3}\b)(?: (\[?\(?\d{3,4}p\)?\]?))?')
+                alt_pattern = re.compile(r'S(\d{1,2}) - (\d{2})')
                 if re.search(pattern, file) or re.search(alt_pattern, file):
-                    show_folder, season_number, new_name, media_dir = process_anime(file, pattern, alt_pattern, split)
+                    show_folder, season_number, new_name, media_dir = await process_anime(file, pattern, alt_pattern, split)
                     season_folder = f"Season {int(season_number):02d}"
                     is_anime = True
                 else:
-                    continue # comment this line to process movies
                     is_movie = True
                     movie_folder_name = os.path.basename(root)
-                    movie_name, ext = process_movie(file, movie_folder_name)
-                    movie_name = movie_name.replace("/", " ")
-                    new_name = movie_name + ext
+                    movies_cache[file].append((movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
+                    if len(movies_cache) >= 5:
+                        await process_movies_in_batches(movies_cache)
+                    continue
 
             if not is_movie and not is_anime:
                 episode_identifier = episode_match.group(2)
-                
+
                 multiepisode_match = re.search(r'(S\d{2,3} ?E\d{2,3}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier, re.IGNORECASE)
                 alt_episode_match = re.search(r'\d{1,2}x\d{2}', episode_identifier)
-                edge_case_episode_match = re.search(r'S\d{3} ?E\d{2}',episode_identifier)
-                #log_message('DEBUG',f'Identified episode: {episode_identifier}')
+                edge_case_episode_match = re.search(r'S\d{3} ?E\d{2}', episode_identifier)
+                
                 if multiepisode_match:
-                    #log_message('DEBUG',f'Identifier before: {episode_identifier}')
                     episode_identifier = re.sub(
                         r'(S\d{2,3} ?E\d{2}E\d{2}|S\d{2,3} ?E\d{2}\+E\d{2}|S\d{2,3} ?E\d{2}\-E\d{2})',
                         format_multi_match,
                         episode_identifier,
                         flags=re.IGNORECASE
                     )
-                    #log_message('DEBUG', f'After: {episode_identifier}')
                 elif alt_episode_match:
-                    print(episode_identifier)
                     episode_identifier = re.sub(r'(\d{1,2})x(\d{2})', lambda m: f's{int(m.group(1)):02d}e{m.group(2)}', episode_identifier)
-                    print(episode_identifier)
                 elif edge_case_episode_match:
                     episode_identifier = re.sub(r'S(\d{3}) ?E(\d{2})', lambda m: f's{int(m.group(1)):d}e{m.group(2)}', episode_identifier)
-                
-                #log_message('DEBUG',f'Identifier: {episode_identifier}')    
                     
                 parent_folder_name = os.path.basename(root)
-                folder_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*|(\d{3,4}p)', '', parent_folder_name).replace('-',' ').replace('.',' ')
-                #log_message('DEBUG',f'Folder: {folder_name}')
-                #log_message('DEBUG',f'parent folder: {parent_folder_name}')
+                folder_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*|(\d{3,4}p)', '', parent_folder_name).replace('-', ' ').replace('.', ' ')
+                
                 if re.match(r'S\d{2} ?E\d{2}', file, re.IGNORECASE):
                     show_name = re.sub(r'\s*(S\d{2}.*|Season \d+).*', '', parent_folder_name).replace('-', ' ').replace('.', ' ').strip()
-                    #log_message('DEBUG',f'showname: {show_name}')
                 else:
                     show_name = episode_match.group(1).replace('.', ' ').strip()
-                    #log_message('DEBUG',f'showname2: {show_name}')
                 
-                if are_similar(folder_name.lower(),show_name.lower()):
+                if are_similar(folder_name.lower(), show_name.lower()):
                     show_name = folder_name    
 
                 name, ext = os.path.splitext(file)
@@ -540,9 +602,7 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 season_number = re.search(r'S(\d{2}) ?E\d{2,3}', episode_identifier, re.IGNORECASE).group(1)
                 season_folder = f"Season {int(season_number):02d}"
                 
-                
-                show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name)
-                show_folder = show_folder.rstrip()
+                show_folder = re.sub(r'\s+$|_+$|-+$|(\()$', '', show_name).rstrip()
 
                 if show_folder.isdigit() and len(show_folder) <= 4:
                     year = None
@@ -550,45 +610,35 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     year = extract_year_from_folder(parent_folder_name) or extract_year(show_folder)
                     if year:
                         show_folder = re.sub(r'\(\d{4}\)$', '', show_folder).strip()
-                        show_folder = re.sub(r'\d{4}$', '', show_folder).strip()
-                        
-                show_folder, showid, media_dir = get_series_info(show_folder, year, split)
-
+                        show_folder = re.sub(r'\d{4}$', '', show_folder).strip()       
+                show_folder, showid, media_dir = await get_series_info(show_folder, year, split)
                 show_folder = show_folder.replace('/', '')
                 
                 resolution = extract_resolution(new_name)
-                #log_message("DEBUG", f"Resolution from file = {resolution}")
                 if not resolution:
                     resolution = extract_resolution(parent_folder_name)
-                    #log_message("DEBUG",f"Resolution from folder = {resolution}")
                     if resolution is not None:
                         resolution = f"{resolution}"
-                #log_message('DEBUG',f'{show_folder} - {year} {episode_identifier}{ext}')
-                file_name = re.search(r'(^.*S\d{2}E\d{2})',new_name)
+                        
+                file_name = re.search(r'(^.*S\d{2}E\d{2})', new_name)
                 if file_name:
                     new_name = file_name.group(0) + ' '
-                if re.search('\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
-                    year = re.search('\((\d{4})\)',show_folder).group(1)
-                    episode_name = re.sub('\{(tmdb-\d+|imdb-tt\d+)\}','',show_folder).strip()
-                    new_name = get_episode_details(showid ,episode_identifier)
-                    #log_message('DEBUG',)    
+                if re.search(r'\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
+                    year = re.search(r'\((\d{4})\)', show_folder).group(1)
+                    new_name = get_episode_details(showid, episode_identifier)
+                    
                 new_name = new_name.rstrip() + ext
-            
-                
-            new_name = new_name.replace('/','')
-            if not is_movie:
-                dest_path = os.path.join(dest_dir, media_dir, show_folder, season_folder)
-            else:
-                dest_path = os.path.join(dest_dir, "movies", movie_name)
+
+            new_name = new_name.replace('/', '')
+            dest_path = os.path.join(dest_dir, media_dir, show_folder, season_folder)
                     
             os.makedirs(dest_path, exist_ok=True)
-            
             dest_file = os.path.join(dest_path, new_name)
             if os.path.islink(dest_file):
                 if os.readlink(dest_file) == src_file:
                     continue
                 else:
-                    new_name = get_unique_filename(dest_path,new_name)
+                    new_name = get_unique_filename(dest_path, new_name)
                     dest_file = os.path.join(dest_path, new_name)
             
             if os.path.exists(dest_file) and not os.path.islink(dest_file):
@@ -601,24 +651,36 @@ def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 existing_symlinks.add((src_file, dest_file))
                 save_link(existing_symlinks, links_pkl)
                 symlink_created.append(dest_file)
+                
             clean_destination = os.path.basename(dest_file)
-            log_message("SUCCESS",f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
-    return symlink_created
-            
+            log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
-if __name__ == "__main__":
+    if movies_cache:
+        await process_movies_in_batches(movies_cache)
+
+    return symlink_created
+
+async def main():
     settings = get_settings()
 
     parser = argparse.ArgumentParser(description="Create symlinks for files from src_dir in dest_dir.")
     parser.add_argument("--split-dirs", action="store_true", help="Use separate directories for anime")
     args = parser.parse_args()
     
+    apikey = get_api_key()
+    if args.split_dirs:
+        if apikey is None or apikey == "" or apikey == "null":
+            apikey = prompt_for_api_key()
+        
     if 'src_dir' not in settings or 'dest_dir' not in settings:
-        log_message("INFO",f"Missing configuration in settings.json. Please provide necessary inputs.{Style.RESET_ALL}")
-        src_dir, dest_dir = prompt_for_settings(split=args.split_dirs)
+        log_message("INFO", f"Missing configuration in settings.json. Please provide necessary inputs.{Style.RESET_ALL}")
+        src_dir, dest_dir = prompt_for_settings(apikey)
     else:
         src_dir = settings['src_dir']
         dest_dir = settings['dest_dir']
 
-    if create_symlinks(src_dir, dest_dir, force=False, split=args.split_dirs):
-        log_message('SUCCESS', 'All Symlinks have been created!')
+    symlinks_created = await create_symlinks(src_dir, dest_dir, force=False, split=args.split_dirs)
+    log_message('SUCCESS', 'All Symlinks have been created!')
+
+if __name__ == "__main__":
+    asyncio.run(main())

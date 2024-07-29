@@ -22,7 +22,7 @@ Originally, this script was designed to work with a show folder in a zurg/rclone
 
 ### To-Do
 
-- [ ] Enhance the speed by processing movies quicker
+- [x] Enhance the speed by processing movies quicker
 - [ ] Implement looping to allow the script to automatically create symlinks without user input
 
 
@@ -40,7 +40,7 @@ cd DebridMediaOrganiser
 ```
 2. Install the required Python packages:
 ``` sh
-pip install requests colorama
+pip install -r requirements.txt
 ```
 3. Install xmllint package if it doesn't exist
 ```sh
