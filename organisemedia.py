@@ -452,12 +452,12 @@ async def process_anime(file, pattern1, pattern2, split=False):
         episode_number = match.group(2)
         resolution = match.group(3)
         
-        log_message('INFO', f'Anime file: {file}')
+        #log_message('INFO', f'Anime file: {file}')
         
         if show_name in season_cache:
             season_number = season_cache[show_name]
         else:
-            season_number = input("Enter the season number for the above show: ")
+            season_number = await aioconsole.ainput("Enter the season number for the above show: ")
             season_cache[show_name] = season_number
         
         season_match = pattern2.search(file)
@@ -555,6 +555,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     season_folder = f"Season {int(season_number):02d}"
                     is_anime = True
                 else:
+                    continue
                     is_movie = True
                     movie_folder_name = os.path.basename(root)
                     movies_cache[file].append((movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
