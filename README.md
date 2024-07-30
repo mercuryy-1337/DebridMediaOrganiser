@@ -11,6 +11,7 @@ Originally, this script was designed to work with a show folder in a zurg/rclone
 - Stores created symlinks and checks existing symlinks before processing files
 - filter out sample files
 - Matches riven's naming scheme
+- Scans plex library sections upon successful creation of symlinks
 
 ### Known issues/bugs
 - ~~The first show that's processed doesn't get queried through TMDB.~~
@@ -62,7 +63,7 @@ python3 organisemedia.py
 # Usage
 **Basic Usage:**
 ```sh
-python3 organisemedia.py [--split-dirs]
+python3 organisemedia.py [--split-dirs] [--loop]
 ```
 On the first run, the script will prompt you to enter the following settings, which will then be saved in settings.json for future use:
 1. Your TMDb API key (if you run the script with the `--split-dirs` flag. It is used to authenticate requests to The Movie Database (TMDb) API, enabling access to TV show data such as keywords associated with the show. <br/>
@@ -70,7 +71,7 @@ On the first run, the script will prompt you to enter the following settings, wh
 3. Destination directory where the symlinks will be created and organised into (dest_dir), in this case it will be Riven's top most directory path e.g `/mnt/riven`. <br/>
 
 the optional --split-dirs flag allows the script to place anime shows in it's own folder, separate from the default shows folder.
-
+the optional --loop flag allows the script to scan and process the destination directory every 2 minutes and automatically chooses the first result
 
 ## Example
 **Source directory before running script:**

@@ -16,6 +16,7 @@ init(autoreset=True)
 
 SETTINGS_FILE = 'settings.json'
 links_pkl = 'symlinks.pkl'
+ignored_file = 'ignored.pkl'
 _api_cache = {}
 season_cache = {}
 
@@ -59,6 +60,16 @@ def load_links(file_path):
             return pickle.load(f)
     except FileNotFoundError:
         return set()
+    
+def save_ignored(ignored_files):
+    with open(ignored_file, 'wb') as f:
+        pickle.dump(ignored_files, f)
+
+def load_ignored():
+    if os.path.exists(ignored_file):
+        with open(ignored_file, 'rb') as f:
+            return pickle.load(f)
+    return set()
 
 def save_settings(api_key, src_dir, dest_dir):
     settings = {
@@ -498,7 +509,7 @@ async def process_anime(file, pattern1, pattern2, split=False, force=False):
         
 
 
-async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl):
+async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl, ignored_files):
     movie_name, ext = await process_movie(movie_name, movie_folder_name)
     movie_name = movie_name.replace("/", " ")
     new_name = movie_name + ext
@@ -513,8 +524,8 @@ async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, 
         else:
             new_name = get_unique_filename(dest_path, new_name)
             dest_file = os.path.join(dest_path, new_name)
-
-    if os.path.exists(dest_file) and not os.path.islink(dest_file):
+    elif os.path.exists(dest_file) and not os.path.islink(dest_file):
+        ignored_files.add(dest_file)
         return
 
     if os.path.isdir(src_file):
@@ -528,16 +539,15 @@ async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, 
     async with print_lock:
         log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
-async def process_movies_in_batches(movies_cache, batch_size=5):
+async def process_movies_in_batches(movies_cache, batch_size=5, ignored_files=None):
     tasks = []
     for movie_name, movie_details in movies_cache.items():
         for movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl in movie_details:
-            tasks.append(process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
+            tasks.append(process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl, ignored_files))
             if len(tasks) == batch_size:
                 await asyncio.gather(*tasks)
                 tasks = []
     
-    # Process any remaining tasks that didn't fill up a batch
     if tasks:
         await asyncio.gather(*tasks)
 
@@ -547,6 +557,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
     os.makedirs(dest_dir, exist_ok=True)
     log_message('DEBUG', 'processing...')
     existing_symlinks = load_links(links_pkl)
+    ignored_files = load_ignored()
     symlink_created = []
     movies_cache = defaultdict(list)
     
@@ -558,16 +569,19 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
             media_dir = "shows"
             symlink_exists = False
 
+            if src_file in ignored_files:
+                continue
+
             symlink_exists |= any(
                 src_file == existing_src_file
                 for existing_src_file, _ in existing_symlinks  
             )
             if symlink_exists:
+                ignored_files.add(src_file)
                 continue
 
             sample_match = re.search('sample', file, re.IGNORECASE)
             if sample_match:
-                #log_message('WARN', f'Skipping sample file: {file}')
                 continue
 
             episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
@@ -584,7 +598,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     movie_folder_name = os.path.basename(root)
                     movies_cache[file].append((movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
                     if len(movies_cache) >= 5:
-                        await process_movies_in_batches(movies_cache)
+                        await process_movies_in_batches(movies_cache, ignored_files=ignored_files)
                     continue
 
             if not is_movie and not is_anime:
@@ -667,6 +681,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     dest_file = os.path.join(dest_path, new_name)
             
             if os.path.exists(dest_file) and not os.path.islink(dest_file):
+                ignored_files.add(dest_file)
                 continue
 
             if os.path.isdir(src_file):
@@ -681,8 +696,9 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
             log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
     if movies_cache:
-        await process_movies_in_batches(movies_cache)
+        await process_movies_in_batches(movies_cache, ignored_files=ignored_files)
 
+    save_ignored(ignored_files)
     return symlink_created
 
 async def main():
