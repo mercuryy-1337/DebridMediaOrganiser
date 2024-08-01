@@ -3,7 +3,7 @@ import subprocess
 import requests
 import xml.etree.ElementTree as ET
 import json
-import argparse
+import argparse, asyncio, aioconsole
 
 def get_plex_config():
     """Retrieve Plex configuration from plex.json."""
@@ -16,13 +16,13 @@ def get_plex_config():
     except json.JSONDecodeError:
         raise Exception("Error decoding plex.json.")
 
-def prompt_for_config():
+async def prompt_for_config():
     """Prompt user for Plex configuration details."""
-    plex_host = input("Enter Plex host (e.g., localhost or IP of server): ").strip()
-    plex_port = input("Enter Plex port (e.g., 32400): ").strip()
-    plex_token = input("Enter Plex token: ").strip()
+    plex_host = await aioconsole.ainput("Enter Plex host (e.g., localhost or IP of server): ")
+    plex_port = await aioconsole.ainput("Enter Plex port (e.g., 32400): ")
+    plex_token = await aioconsole.ainput("Enter Plex token: ")
 
-    return plex_host, plex_port, plex_token
+    return plex_host.strip(), plex_port.strip(), plex_token.strip()
 
 def save_plex_config(plex_host, plex_port, plex_token):
     config = {
@@ -32,12 +32,12 @@ def save_plex_config(plex_host, plex_port, plex_token):
     with open('plex.json', 'w', encoding='utf-8') as file:
         json.dump(config, file, indent=4)
 
-def ensure_plex_config():
+async def ensure_plex_config():
     """Ensure plex.json exists and is properly configured."""
     config = get_plex_config()
     if config is None:
         print("Configuration file not found or empty.")
-        plex_host, plex_port, plex_token = prompt_for_config()
+        plex_host, plex_port, plex_token = await prompt_for_config()
         save_plex_config(plex_host, plex_port, plex_token)
     else:
         plex_host = config.get('plex_url', '').replace('http://', '').split(':')[0]
@@ -46,7 +46,7 @@ def ensure_plex_config():
 
         if not plex_host or not plex_port or not plex_token:
             print("Some configuration details are missing or incomplete.")
-            plex_host, plex_port, plex_token = prompt_for_config()
+            plex_host, plex_port, plex_token = await prompt_for_config()
             save_plex_config(plex_host, plex_port, plex_token)
 
     return f'http://{plex_host}:{plex_port}', plex_token
@@ -102,13 +102,15 @@ def scan_plex_library_sections(src_dir, plex_url, plex_token):
             print(f"Successfully scanned library section: {subdir}")
         except subprocess.CalledProcessError as e:
             print(f"Failed to scan library section: {subdir}. Error: {e}")
-
-if __name__ == '__main__':
+            
+async def main():
     parser = argparse.ArgumentParser(description='Scan Plex library sections.')
     parser.add_argument('src_dir', type=str, help='Source directory to scan.')
     
     args = parser.parse_args()
     
-    plex_url, plex_token = ensure_plex_config()
+    plex_url, plex_token = await ensure_plex_config()
 
     scan_plex_library_sections(args.src_dir, plex_url, plex_token)
+if __name__ == '__main__':
+    asyncio.run(main())
