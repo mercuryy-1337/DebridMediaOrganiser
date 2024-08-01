@@ -185,7 +185,6 @@ async def get_movie_info(title, year=None, force=False):
                     if response.status != 200:
                         log_message('ERROR', f"Error fetching movie information: HTTP {response.status}")
                         return title
-
                 try:
                     movie_data = await response.json()
                 except aiohttp.ContentTypeError:
@@ -205,6 +204,7 @@ async def get_movie_info(title, year=None, force=False):
                             _api_cache[cache_key] = proper_name
                             return proper_name
                     if force:
+                        
                         chosen_movie = movie_options[0]
                         imdb_id = chosen_movie.get('imdb_id')
                         movie_title = chosen_movie.get('name')
@@ -283,6 +283,13 @@ async def get_series_info(series_name, year=None, split=False, force=False):
         return series_name, None, shows_dir
     
     if force:
+        if year:
+            for i, meta in enumerate(metas):
+                release_info = meta.get('releaseInfo')
+                release_info = re.match(r'\b\d{4}\b', release_info).group()
+                if release_info and int(year) == int(release_info):
+                    selected_index = i
+                    break
         selected_meta = metas[selected_index]
         series_id = selected_meta['imdb_id']
         year = selected_meta.get('releaseInfo')
@@ -338,7 +345,10 @@ async def get_series_info(series_name, year=None, split=False, force=False):
             else:
                 selected_index = 0
         else:
-            selected_index = 0
+            for i, meta in enumerate(metas):
+                if are_similar(series_name.lower().strip(), meta.get('name').lower(), .90):
+                    selected_index = i
+                    break
     else:
         for i, meta in enumerate(metas):
             release_info = meta.get('releaseInfo')
@@ -384,7 +394,6 @@ def get_episode_details(series_id, episode_identifier, name, year):
     match = re.search(r'(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
         return f"{name} ({year}) - {episode_identifier.lower()}"
-        
         
     season = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
     episode = int(re.search(r'S(\d{2}) ?E(\d{2,3})', episode_identifier, re.IGNORECASE).group(2))
@@ -451,8 +460,6 @@ async def process_movie(file, foldername, force=False):
     name, ext = os.path.splitext(file)
     if '.' in moviename:
         moviename = re.sub(r'\.', ' ', moviename)
-
-
     pattern = r"^(.*?)\s*[\(\[]?(\d{4})[\)\]]?\s*(?:.*?(\d{3,4}p))?.*$"
     four_digit_numbers = re.findall(r'\b\d{4}\b', moviename)
     if len(four_digit_numbers) >= 2:
@@ -482,17 +489,33 @@ async def process_anime(file, pattern1, pattern2, split=False, force=False):
     name, ext = os.path.splitext(file)
     
     match = pattern1.match(name)
+    
     if match:
         show_name = match.group(1).strip()
         episode_number = match.group(2)
         resolution = match.group(3)
-        
-        if show_name in season_cache:
-            season_number = season_cache[show_name]
+        season_match = re.search(r'S(\d{1})', show_name, re.IGNORECASE)
+        special_match = re.search(r'OVA|NCED', show_name)
+        if not force:
+            if show_name in season_cache:
+                season_number = season_cache[show_name]
+            elif season_match:
+                season_number = season_match.group(1)
+            elif special_match:
+                season_number = 0
+            else:
+                log_message('INFO', f'Anime Show: {show_name}')
+                season_number = await aioconsole.ainput("Enter the season number for the above show: ")
+                season_cache[show_name] = season_number
         else:
-            log_message('INFO', f'Anime Show: {show_name}')
-            season_number = await aioconsole.ainput("Enter the season number for the above show: ")
-            season_cache[show_name] = season_number
+            if show_name in season_cache:
+                season_number = season_cache[show_name]
+            elif season_match:
+                season_number = season_match.group(1)
+            elif special_match:
+                season_number = 0
+            else:
+                season_number = 1
         
         season_match = pattern2.search(file)
         if season_match:
@@ -504,7 +527,7 @@ async def process_anime(file, pattern1, pattern2, split=False, force=False):
         year = re.search(r'\((\d{4})\)', show_name).group(1)
         name = get_episode_details(showid, episode_identifier, show_name, year)
         name = name.strip() + ext
-        
+        show_name = show_name.replace('/', '')
         return show_name, season_number, name, showdir
         
 
@@ -547,7 +570,6 @@ async def process_movies_in_batches(movies_cache, batch_size=5, ignored_files=No
             if len(tasks) == batch_size:
                 await asyncio.gather(*tasks)
                 tasks = []
-    
     if tasks:
         await asyncio.gather(*tasks)
 
@@ -568,10 +590,10 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
             is_movie = False
             media_dir = "shows"
             symlink_exists = False
-
+            
             if src_file in ignored_files:
-                continue
-
+               continue
+            
             symlink_exists |= any(
                 src_file == existing_src_file
                 for existing_src_file, _ in existing_symlinks  
@@ -579,14 +601,16 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
             if symlink_exists:
                 ignored_files.add(src_file)
                 continue
-
+            
             sample_match = re.search('sample', file, re.IGNORECASE)
+            #TODO: Exclude extras like deleted scenes etc
+            #extras_match = re.search(r'deleted ?.scenes\b', file, re.IGNORECASE) 
             if sample_match:
                 continue
 
             episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
-                pattern = re.compile(r'(.*) - (\d{2,3}\b)(?: (\[?\(?\d{3,4}p\)?\]?))?')
+                pattern = re.compile(r'(.*) - (\d{2,3})(?:v2)?\b(?: (\[?\(?\d{3,4}p\)?\]?))?')
                 alt_pattern = re.compile(r'S(\d{1,2}) - (\d{2})')
                 if re.search(pattern, file) or re.search(alt_pattern, file):
                     show_folder, season_number, new_name, media_dir = await process_anime(file, pattern, alt_pattern, split, force)
