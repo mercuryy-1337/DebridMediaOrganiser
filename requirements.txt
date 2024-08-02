@@ -1,0 +1,4 @@
+requests
+aioconsole
+aiohttp
+colorama
