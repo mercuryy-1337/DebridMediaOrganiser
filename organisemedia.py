@@ -263,7 +263,7 @@ async def get_movie_info(title, year=None, force=False):
 
 async def get_series_info(series_name, year=None, split=False, force=False):
     global _api_cache
-    #log_message("DEBUG", f"Current file: {series_name} year: {year}")
+    log_message("INFO", f"Current file: {series_name} year: {year}")
     shows_dir = "shows"
     formatted_name = series_name.replace(" ", "%20")
     cache_key = f"series_{formatted_name}_{year}"
@@ -384,6 +384,11 @@ def get_episode_details(series_id, episode_identifier, name, year):
     if response.status_code != 200:
         raise Exception(f"Error getting series details: {response.status_code}")
     series_details = response.json()
+    if not series_details:
+        if year:
+            return f"{name} ({year}) - {episode_identifier.lower()}"
+        else:
+            return f"{name} - {episode_identifier.lower()}"
     meta = series_details.get('meta', [])
     releaseInfo = meta.get('releaseInfo')  
     if releaseInfo is None:
