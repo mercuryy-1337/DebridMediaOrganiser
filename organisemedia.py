@@ -1,6 +1,6 @@
 import os
 import argparse
-import re
+import re, string
 import shutil
 import requests
 import json
@@ -47,6 +47,7 @@ def are_similar(folder_name, show_name, threshold=0.8):
     folder_name = re.sub(r'[^\w\s]', '', folder_name)
     show_name = re.sub(r'[^\w\s]', '', show_name)
     similarity = difflib.SequenceMatcher(None, folder_name, show_name).ratio()
+    #log_message('DEBUG', f"Name 1: {folder_name}, Name 2: {show_name}, Similarity = {similarity >= threshold}")
     return similarity >= threshold
 
 
@@ -265,6 +266,7 @@ async def get_series_info(series_name, year=None, split=False, force=False):
     global _api_cache
     log_message("INFO", f"Current file: {series_name} year: {year}")
     shows_dir = "shows"
+    series_name = series_name.rstrip(string.punctuation)
     formatted_name = series_name.replace(" ", "%20")
     cache_key = f"series_{formatted_name}_{year}"
     if cache_key in _api_cache:
@@ -353,9 +355,14 @@ async def get_series_info(series_name, year=None, split=False, force=False):
         for i, meta in enumerate(metas):
             release_info = meta.get('releaseInfo')
             release_info = re.match(r'\b\d{4}\b', release_info).group()
-            if release_info and int(year) == int(release_info):
-                selected_index = i
-                break
+            #log_message('DEBUG', f"Name1: {series_name.lower()}, Name2: {meta.get('name')}")
+            if are_similar(series_name.lower().strip(), meta.get('name').lower(), .90):
+                if release_info and int(year) == int(release_info):
+                    selected_index = i
+                    break
+                else:
+                    selected_index = 0
+
     
     selected_meta = metas[selected_index]
     series_id = selected_meta['imdb_id']
@@ -398,7 +405,7 @@ def get_episode_details(series_id, episode_identifier, name, year):
     year = re.match(r'\b\d{4}\b', year).group()
     match = re.search(r'(S\d{2,3} ?E\d{2}\-E\d{2})', episode_identifier)
     if match:
-        return f"{name} ({year}) - {episode_identifier.lower()}"
+        return f"{name} - {episode_identifier.lower()}"
         
     season = int(re.search(r'S(\d{2}) ?E\d{2}', episode_identifier, re.IGNORECASE).group(1))
     episode = int(re.search(r'S(\d{2}) ?E(\d{2,3})', episode_identifier, re.IGNORECASE).group(2))
@@ -458,7 +465,7 @@ def get_unique_filename(dest_path, new_name):
 
 async def process_movie(file, foldername, force=False):
     path = f"/{foldername}"
-    #log_message("DEBUG", f"Current Movie file: {os.path.join(path,file)}")
+    log_message("INFO", f"Current Movie file: {os.path.join(path,file)}")
     
     moviename = re.sub(r'^\[.*?\]\s*', '', foldername)
     moviename = re.sub(r"^\d\. ", "", moviename)
@@ -531,7 +538,10 @@ async def process_anime(file, pattern1, pattern2, split=False, force=False):
         show_name, showid, showdir = await get_series_info(show_name.strip(), "", split, force)
         year = re.search(r'\((\d{4})\)', show_name).group(1)
         name = get_episode_details(showid, episode_identifier, show_name, year)
-        name = name.strip() + ext
+        if resolution:
+            name = name.rstrip() + " " + resolution + ext
+        else:
+            name = name.rstrip() + ext
         show_name = show_name.replace('/', '')
         return show_name, season_number, name, showdir
         
@@ -615,14 +625,14 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
 
             episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
-                pattern = re.compile(r'(.*) - (\d{2,3})(?:v2)?\b(?: (\[?\(?\d{3,4}p\)?\]?))?')
+                pattern = re.compile(r'(?!.* - \d+\.\d+GB)(.*) - (\d{2,3})(?:v2)?\b(?: (\[?\(?\d{3,4}p\)?\]?))?')
                 alt_pattern = re.compile(r'S(\d{1,2}) - (\d{2})')
                 if re.search(pattern, file) or re.search(alt_pattern, file):
                     show_folder, season_number, new_name, media_dir = await process_anime(file, pattern, alt_pattern, split, force)
                     season_folder = f"Season {int(season_number):02d}"
                     is_anime = True
                 else:
-                    continue
+                    continue # you can comment this line to enable the processing of movies
                     is_movie = True
                     movie_folder_name = os.path.basename(root)
                     movies_cache[file].append((movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
@@ -694,8 +704,11 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 if re.search(r'\{(tmdb-\d+|imdb-tt\d+)\}', show_folder):
                     year = re.search(r'\((\d{4})\)', show_folder).group(1)
                     new_name = get_episode_details(showid, episode_identifier, show_folder, year)
-                    
-                new_name = new_name.rstrip() + ext
+                
+                if resolution:
+                    new_name = new_name.rstrip() + " " + resolution + ext
+                else: 
+                    new_name = new_name.rstrip() + ext
 
             new_name = new_name.replace('/', '')
             dest_path = os.path.join(dest_dir, media_dir, show_folder, season_folder)
