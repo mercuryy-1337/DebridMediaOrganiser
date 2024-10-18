@@ -624,8 +624,8 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 ignored_files.add(src_file)
                 log_message('[WARN]', f"Ignoring file: {src_file}")
                 continue
-
-            sample_match = re.search('sample', file, re.IGNORECASE)
+            
+            sample_match = re.search(r'sample|trailer|etrg', file, re.IGNORECASE)
             #TODO: Exclude extras like deleted scenes etc
             #extras_match = re.search(r'deleted ?.scenes\b', file, re.IGNORECASE) 
             if sample_match:
