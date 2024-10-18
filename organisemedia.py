@@ -685,6 +685,8 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 else:
                     new_name = name
 
+                if '.' in episode_identifier:
+                    episode_identifier = re.sub(r'\.', ' ', episode_identifier)
                 season_number = re.search(r'S(\d{2}) ?E\d{2,3}', episode_identifier, re.IGNORECASE).group(1)
                 season_folder = f"Season {int(season_number):02d}"
                 
