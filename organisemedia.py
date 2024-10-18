@@ -134,7 +134,7 @@ def get_moviedb_id(imdbid):
             if 'moviedb_id' in movie_info:
                 return movie_info['moviedb_id']
             else:
-                log_message('[WARN]',"moviedb_id not found in movie_info")
+                log_message('[WARN]',f"moviedb_id {imdbid}not found in movie_info")
                 return None
         else:
             return None
@@ -620,7 +620,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 ignored_files.add(src_file)
                 continue
             
-            if not src_file.endswith(('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.ts', '.webm')):
+            if not src_file.lower().endswith(('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.ts', '.webm')):
                 ignored_files.add(src_file)
                 log_message('[WARN]', f"Ignoring file: {src_file}")
                 continue
