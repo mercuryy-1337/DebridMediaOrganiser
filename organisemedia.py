@@ -475,14 +475,16 @@ async def process_movie(file, foldername, force=False):
     pattern = r"^(.*?)\s*[\(\[]?(\d{4})[\)\]]?\s*(?:.*?(\d{3,4}p))?.*$"
     four_digit_numbers = re.findall(r'\b\d{4}\b', moviename)
     if len(four_digit_numbers) >= 2:
-        pattern = r"(.+?)\((\d{4})\)\D+(\d{3,4})(p?)"
-        match = re.search(pattern, moviename)
-        log_message('[DEBUG]', f"Match: {match}")
-        title = match.group(1).strip("(")
-        year = match.group(2).strip('()')
+        #pattern = r"(.+?)\((\d{4})\)\D+(\d{3,4})(p?)"
+        #match = re.search(pattern, moviename)
+        log_message('[DEBUG]', f"Moviename: {moviename}")
+        log_message('[DEBUG]', f"Four Digit numbers: {four_digit_numbers}")
+        title = four_digit_numbers[0]
+        year = four_digit_numbers[1]
     else:
         # Search the pattern in the string
         match = re.search(pattern, moviename)
+        #log_message('[DEBUG]', f"Match: {match}")
         title = match.group(1)
         year = match.group(2).strip('()')
         #resolution = match.group(3)
@@ -638,7 +640,7 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                     season_folder = f"Season {int(season_number):02d}"
                     is_anime = True
                 else:
-                    #continue # you can comment this line to enable the processing of movies
+                    continue # you can comment this line to enable the processing of movies
                     is_movie = True
                     movie_folder_name = os.path.basename(root)
                     movies_cache[file].append((movie_folder_name, src_file, dest_dir, existing_symlinks, links_pkl))
