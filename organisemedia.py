@@ -10,7 +10,7 @@ import pickle, subprocess
 from collections import defaultdict
 import asyncio, aioconsole, aiohttp
 from colorama import init, Fore, Style
-
+from scan_plex import ensure_plex_config, scan_plex_library_sections
 init(autoreset=True)
 
 
@@ -788,21 +788,21 @@ async def main():
         while True:
             if await create_symlinks(src_dir, dest_dir, force, split=args.split_dirs):
                 log_message('[SUCCESS]', 'Attempting to update Plex Library sections')
-                command = ['python3', 'scan_plex.py', dest_dir]
                 try:
-                    subprocess.run(command, check=True)
-                except subprocess.CalledProcessError as e:
-                    log_message('ERROR', f"Error running scan_plex.py: {e}")
+                    plex_url, plex_token = await ensure_plex_config()
+                    await scan_plex_library_sections(dest_dir, plex_url, plex_token)
+                except Exception as e:
+                    log_message('ERROR', f"Error updating Plex Library sections: {e}")
             log_message('[INFO]', "Sleeping for 2 minutes before next run...")
             time.sleep(120)
     else:
         if await create_symlinks(src_dir, dest_dir, force, split=args.split_dirs):
             log_message('[SUCCESS]', 'Attempting to update Plex Library sections')
-            command = ['python3', 'scan_plex.py', dest_dir]
             try:
-                subprocess.run(command, check=True)
-            except subprocess.CalledProcessError as e:
-                log_message('ERROR', f"Error running scan_plex.py: {e}")
+                plex_url, plex_token = await ensure_plex_config()
+                await scan_plex_library_sections(dest_dir, plex_url, plex_token)
+            except Exception as e:
+                log_message('ERROR', f"Error updating Plex Library sections: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
