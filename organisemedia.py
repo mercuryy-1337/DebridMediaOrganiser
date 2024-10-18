@@ -21,11 +21,11 @@ _api_cache = {}
 season_cache = {}
 
 LOG_LEVELS = {
-    "SUCCESS": {"level": 10, "color": Fore.LIGHTGREEN_EX},
-    "INFO": {"level": 20, "color": Fore.LIGHTBLUE_EX},
+    "[SUCCESS]": {"level": 10, "color": Fore.LIGHTGREEN_EX},
+    "[INFO]": {"level": 20, "color": Fore.LIGHTBLUE_EX},
     "ERROR": {"level": 30, "color": Fore.RED},
-    "WARN": {"level": 40, "color": Fore.YELLOW},
-    "DEBUG": {"level": 50, "color": Fore.LIGHTMAGENTA_EX}
+    "[WARN]": {"level": 40, "color": Fore.YELLOW},
+    "[DEBUG]": {"level": 50, "color": Fore.LIGHTMAGENTA_EX}
 }
 
 print_lock = asyncio.Lock()
@@ -134,7 +134,7 @@ def get_moviedb_id(imdbid):
             if 'moviedb_id' in movie_info:
                 return movie_info['moviedb_id']
             else:
-                log_message('WARN',"moviedb_id not found in movie_info")
+                log_message('[WARN]',"moviedb_id not found in movie_info")
                 return None
         else:
             return None
@@ -180,7 +180,7 @@ async def get_movie_info(title, year=None, force=False):
                             async with session.get(url) as response:
                                 pass
                         else:
-                            log_message('WARN', "IMDB id not provided, returning default title and dir")
+                            log_message('[WARN]', "IMDB id not provided, returning default title and dir")
                             return title
 
                     if response.status != 200:
@@ -214,12 +214,12 @@ async def get_movie_info(title, year=None, force=False):
                         return proper_name
                     if not matched:
                         async with print_lock:
-                            log_message('WARN', f"No exact match found for {title}. Please choose from the following options or enter IMDb ID directly:")
+                            log_message('[WARN]', f"No exact match found for {title}. Please choose from the following options or enter IMDb ID directly:")
                             for i, movie_info in enumerate(movie_options[:3]):
                                 imdb_id = movie_info.get('imdb_id')
                                 movie_title = movie_info.get('name')
                                 year_info = movie_info.get('releaseInfo')
-                                log_message('INFO', f"{i+1}. {movie_title} ({year_info})")
+                                log_message('[INFO]', f"{i+1}. {movie_title} ({year_info})")
                             choice = await aioconsole.ainput("Enter the number of your choice, or enter IMDb ID directly: ")
                             if choice.lower().startswith('tt'):
                                 imdb_id = choice
@@ -252,10 +252,10 @@ async def get_movie_info(title, year=None, force=False):
                                         proper_name = f"{movie_title} ({year_info}) {{imdb-{imdb_id}}}"
                                         return proper_name
                                     else:
-                                        log_message('WARN', f"Invalid choice, returning '{title}'")
+                                        log_message('[WARN]', f"Invalid choice, returning '{title}'")
                                         return title
                                 except ValueError:
-                                    log_message('WARN', f"Invalid input, returning '{title}'")
+                                    log_message('[WARN]', f"Invalid input, returning '{title}'")
                                     return title
         except aiohttp.ClientError as e:
             log_message('ERROR', f"Error fetching movie information: {e}")
@@ -264,7 +264,7 @@ async def get_movie_info(title, year=None, force=False):
 
 async def get_series_info(series_name, year=None, split=False, force=False):
     global _api_cache
-    log_message("INFO", f"Current file: {series_name} year: {year}")
+    log_message("[INFO]", f"Current file: {series_name} year: {year}")
     shows_dir = "shows"
     series_name = series_name.rstrip(string.punctuation)
     formatted_name = series_name.replace(" ", "%20")
@@ -332,7 +332,7 @@ async def get_series_info(series_name, year=None, split=False, force=False):
                             year_info = re.match(r'\b\d{4}\b', year_info).group()
                             series_info = f"{show_title} ({year_info}) {{imdb-{imdb_id}}}"
                             if split:
-                                log_message('DEBUG', f"dir before: {shows_dir}")
+                                log_message('[DEBUG]', f"dir before: {shows_dir}")
                                 shows_dir = "anime_shows" if is_anime(get_moviedb_id(imdb_id)) else "shows"
                             _api_cache[cache_key] = (series_info, imdb_id, shows_dir)
                             return series_info, imdb_id, shows_dir
@@ -375,7 +375,7 @@ async def get_series_info(series_name, year=None, split=False, force=False):
     return series_info, series_id, shows_dir
 
 def format_multi_match(match):
-    log_message('DEBUG', F'Match: {match}')
+    log_message('[DEBUG]', F'Match: {match}')
     matched_string = match.group(0)
     if '+' in matched_string or '-' in matched_string:
         matched_string = matched_string.replace(' ', '')
@@ -465,7 +465,7 @@ def get_unique_filename(dest_path, new_name):
 
 async def process_movie(file, foldername, force=False):
     path = f"/{foldername}"
-    log_message("INFO", f"Current Movie file: {os.path.join(path,file)}")
+    log_message("[INFO]", f"Current Movie file: {os.path.join(path,file)}")
     
     moviename = re.sub(r'^\[.*?\]\s*', '', foldername)
     moviename = re.sub(r"^\d\. ", "", moviename)
@@ -516,7 +516,7 @@ async def process_anime(file, pattern1, pattern2, split=False, force=False):
             elif special_match:
                 season_number = 0
             else:
-                log_message('INFO', f'Anime Show: {show_name}')
+                log_message('[INFO]', f'Anime Show: {show_name}')
                 season_number = await aioconsole.ainput("Enter the season number for the above show: ")
                 season_cache[show_name] = season_number
         else:
@@ -575,7 +575,7 @@ async def process_movie_task(movie_name, movie_folder_name, src_file, dest_dir, 
     
     clean_destination = os.path.basename(dest_file)
     async with print_lock:
-        log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
+        log_message("[SUCCESS]", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
 async def process_movies_in_batches(movies_cache, batch_size=5, ignored_files=None):
     tasks = []
@@ -592,7 +592,7 @@ async def process_movies_in_batches(movies_cache, batch_size=5, ignored_files=No
 
 async def create_symlinks(src_dir, dest_dir, force=False, split=False):
     os.makedirs(dest_dir, exist_ok=True)
-    log_message('DEBUG', 'processing...')
+    log_message('[DEBUG]', 'processing...')
     existing_symlinks = load_links(links_pkl)
     ignored_files = load_ignored()
     symlink_created = []
@@ -617,13 +617,18 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
                 ignored_files.add(src_file)
                 continue
             
+            if not src_file.endswith(('.mp4', '.mkv', '.avi', '.mov', '.flv', '.wmv', '.mpg', '.mpeg', '.m4v', '.ts', '.webm')):
+                ignored_files.add(src_file)
+                log_message('[WARN]', f"Ignoring file: {src_file}")
+                continue
+
             sample_match = re.search('sample', file, re.IGNORECASE)
             #TODO: Exclude extras like deleted scenes etc
             #extras_match = re.search(r'deleted ?.scenes\b', file, re.IGNORECASE) 
             if sample_match:
                 continue
 
-            episode_match = re.search(r'(.*?)(S\d{2} E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
+            episode_match = re.search(r'(.*?)(S\d{2}.? ?E\d{2,3}(?:\-E\d{2})?|\b\d{1,2}x\d{2}\b|S\d{2}E\d{2}-?(?:E\d{2})|S\d{2,3} ?E\d{2}(?:\+E\d{2})?)', file, re.IGNORECASE)
             if not episode_match:
                 pattern = re.compile(r'(?!.* - \d+\.\d+GB)(.*) - (\d{2,3})(?:v2)?\b(?: (\[?\(?\d{3,4}p\)?\]?))?')
                 alt_pattern = re.compile(r'S(\d{1,2}) - (\d{2})')
@@ -729,13 +734,22 @@ async def create_symlinks(src_dir, dest_dir, force=False, split=False):
             if os.path.isdir(src_file):
                 shutil.copytree(src_file, dest_file, symlinks=True)
             else:
-                os.symlink(src_file, dest_file)
+                try:
+                    os.symlink(src_file, dest_file)
+                except OSError as e:
+                    if e.errno == 36:  # File name too long
+                        short_name = re.sub(r"(s\d{2}e\d{2}).*\.(\w+)$", r"\1.\2", new_name, flags=re.IGNORECASE) 
+                        dest_file = os.path.join(dest_path, short_name)
+                        print(dest_file)
+                        os.symlink(src_file, dest_file)
+                    else:
+                        raise
                 existing_symlinks.add((src_file, dest_file))
                 save_link(existing_symlinks, links_pkl)
                 symlink_created.append(dest_file)
                 
             clean_destination = os.path.basename(dest_file)
-            log_message("SUCCESS", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
+            log_message("[SUCCESS]", f"Created symlink: {Fore.LIGHTCYAN_EX}{clean_destination} {Style.RESET_ALL}-> {src_file}")
 
     if movies_cache:
         await process_movies_in_batches(movies_cache, ignored_files=ignored_files)
@@ -758,7 +772,7 @@ async def main():
             apikey = prompt_for_api_key()
         
     if 'src_dir' not in settings or 'dest_dir' not in settings:
-        log_message("INFO", f"Missing configuration in settings.json. Please provide necessary inputs.{Style.RESET_ALL}")
+        log_message("[INFO]", f"Missing configuration in settings.json. Please provide necessary inputs.{Style.RESET_ALL}")
         src_dir, dest_dir = prompt_for_settings(apikey)
     else:
         src_dir = settings['src_dir']
@@ -768,17 +782,17 @@ async def main():
         force = True
         while True:
             if await create_symlinks(src_dir, dest_dir, force, split=args.split_dirs):
-                log_message('SUCCESS', 'Attempting to update Plex Library sections')
+                log_message('[SUCCESS]', 'Attempting to update Plex Library sections')
                 command = ['python3', 'scan_plex.py', dest_dir]
                 try:
                     subprocess.run(command, check=True)
                 except subprocess.CalledProcessError as e:
                     log_message('ERROR', f"Error running scan_plex.py: {e}")
-            log_message('INFO', "Sleeping for 2 minutes before next run...")
+            log_message('[INFO]', "Sleeping for 2 minutes before next run...")
             time.sleep(120)
     else:
         if await create_symlinks(src_dir, dest_dir, force, split=args.split_dirs):
-            log_message('SUCCESS', 'Attempting to update Plex Library sections')
+            log_message('[SUCCESS]', 'Attempting to update Plex Library sections')
             command = ['python3', 'scan_plex.py', dest_dir]
             try:
                 subprocess.run(command, check=True)
